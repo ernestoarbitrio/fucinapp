@@ -1,0 +1,26 @@
+default_language_version:
+    python: python3.13
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files # prevents giant files from being committed.
+      - id: check-docstring-first # checks a common error of defining a docstring after code.
+      - id: check-merge-conflict # checks for files that contain merge conflict strings.
+      - id: check-symlinks # checks for symlinks which do not point to anything.
+      - id: check-toml # checks toml files for parseable syntax.
+      - id: check-vcs-permalinks # ensures that links to vcs websites are permalinks.
+      - id: check-xml # checks xml files for parseable syntax.
+      - id: check-yaml # checks yaml files for parseable syntax.
+      - id: debug-statements # checks for debugger imports and py37+ `breakpoint()` calls in python source.
+      - id: destroyed-symlinks # detects symlinks which are changed to regular files with a content of a path which that symlink was pointing to.
+      - id: end-of-file-fixer # ensures that a file is either empty, or ends with one newline.
+      - id: mixed-line-ending # replaces or checks mixed line ending.
+      - id: trailing-whitespace # trims trailing whitespace.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.8
+    hooks:
+    -   id: ruff-check
+        args:
+        - --fix
+    -   id: ruff-format

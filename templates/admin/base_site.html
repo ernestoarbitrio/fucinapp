@@ -1,0 +1,60 @@
+{% extends "admin/base.html" %}
+
+{% block site_header %}
+<h1 id="site-name"><a href="{% url 'admin:index' %}">Fucinapp</a></h1>
+{% endblock %}
+
+{% block title %}{{ title }} | Fucinapp{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+    // Add registro soci button only on soci changelist
+    if (window.location.pathname === "/admin/anagrafica/socio/") {
+        const tools = document.querySelector(".object-tools");
+        if (tools) {
+            const li = document.createElement("li");
+            li.innerHTML = `<a href="/admin/anagrafica/socio/registro-soci-pdf/"
+                class=export_link">
+                📋 Registro soci PDF
+            </a>`;
+            tools.prepend(li);
+        }
+    }
+
+    // existing sidebar code...
+});
+document.addEventListener("DOMContentLoaded", function () {
+    const sidebar = document.getElementById("nav-sidebar");
+    if (!sidebar) return;
+
+    const section = document.createElement("div");
+    section.className = "module";
+    section.innerHTML = `
+        <table>
+            <caption>
+                <a href="/anagrafica/dashboard/" class="section" title="Dashboard">
+                    📊 Stats
+                </a>
+            </caption>
+            <tr>
+                <th scope="row">
+                    <a href="/anagrafica/dashboard/">Scadenze</a>
+                </th>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">
+                    <a href="/anagrafica/budget/">Budget</a>
+                </th>
+                <td></td>
+                <td></td>
+            </tr>
+        </table>
+    `;
+    sidebar.appendChild(section);
+});
+</script>
+{% endblock %}

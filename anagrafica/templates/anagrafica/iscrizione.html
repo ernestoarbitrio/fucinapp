@@ -1,0 +1,290 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Richiesta di iscrizione — Fucinapp</title>
+    <link rel="stylesheet" href="{% static 'anagrafica/style.css' %}">
+</head>
+
+<body>
+    <div class="card">
+        <div class="logo">
+            <img src="{% static 'anagrafica/logo-fucina.jpeg' %}" alt="Fucina Salentina"
+                style="width:120px; height:auto; margin-bottom:12px;">
+            <p>Compila il modulo per richiedere l'iscrizione</p>
+        </div>
+
+        <div class="steps">
+            <div class="step active">
+                <div class="dot">1</div>
+                <span>Dati personali</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="dot">2</div>
+                <span>Riepilogo e firma</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="dot">3</div>
+                <span>Completato</span>
+            </div>
+        </div>
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="id_nome">Nome</label>
+                    {{ form.nome }}
+                    {{ form.nome.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="id_cognome">Cognome</label>
+                    {{ form.cognome }}
+                    {{ form.cognome.errors }}
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="id_data_nascita">Data di nascita</label>
+                    {{ form.data_nascita }}
+                    {{ form.data_nascita.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="id_luogo_nascita">Luogo di nascita</label>
+                    {{ form.luogo_nascita }}
+                    {{ form.luogo_nascita.errors }}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="id_codice_fiscale">Codice Fiscale</label>
+                {{ form.codice_fiscale }}
+                {{ form.codice_fiscale.errors }}
+                <div class="cf-hint" id="cf-hint"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="id_via">Indirizzo di residenza</label>
+                {{ form.via }}
+                {{ form.via.errors }}
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="id_provincia">Provincia</label>
+                    <select id="id_provincia" name="provincia" required>
+                        <option value="">— Seleziona provincia —</option>
+                        {% for sigla, nome in form.fields.provincia.choices %}
+                            {% if sigla %}
+                            <option value="{{ sigla }}"
+                                {% if form.data.provincia == sigla or form.initial.provincia == sigla %}selected{% endif %}>
+                                {{ sigla }} — {{ nome }}
+                            </option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                    {{ form.provincia.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="id_comune">Comune</label>
+                    <select id="id_comune" name="comune" required>
+                        <option value="">— Seleziona prima la provincia —</option>
+                    </select>
+                    {{ form.comune.errors }}
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="id_cap">CAP</label>
+                <input type="text" id="id_cap" name="cap" maxlength="5" value="{{ form.cap.value|default:'' }}"
+                    style="background:#f5f5f5;" readonly>
+                {{ form.cap.errors }}
+            </div>
+
+            <div class="form-group">
+                <label for="id_email">Email</label>
+                {{ form.email }}
+                {{ form.email.errors }}
+            </div>
+
+            <div class="form-group">
+                <label for="id_telefono">Telefono</label>
+                {{ form.telefono }}
+                {{ form.telefono.errors }}
+            </div>
+
+                        <!-- Tutore section — hidden by default -->
+            <div id="tutore-section" style="display:none;">
+                <hr class="divider">
+                <div
+                    style="background:#fff3cd; border:1px solid #f0a500; border-radius:8px; padding:12px 16px; margin-bottom:18px;">
+                    <strong>⚠️ Minorenne</strong> — È necessario inserire i dati del tutore legale.
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_tutore_nome">Nome tutore</label>
+                        {{ form.tutore_nome }}
+                        {{ form.tutore_nome.errors }}
+                    </div>
+                    <div class="form-group">
+                        <label for="id_tutore_cognome">Cognome tutore</label>
+                        {{ form.tutore_cognome }}
+                        {{ form.tutore_cognome.errors }}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="id_tutore_codice_fiscale">Codice Fiscale tutore</label>
+                    {{ form.tutore_codice_fiscale }}
+                    {{ form.tutore_codice_fiscale.errors }}
+                </div>
+
+                <div class="form-group">
+                    <label for="id_tutore_residenza">Residenza tutore</label>
+                    {{ form.tutore_residenza }}
+                    {{ form.tutore_residenza.errors }}
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_tutore_email">Email tutore</label>
+                        {{ form.tutore_email }}
+                        {{ form.tutore_email.errors }}
+                    </div>
+                    <div class="form-group">
+                        <label for="id_tutore_telefono">Telefono tutore</label>
+                        {{ form.tutore_telefono }}
+                        {{ form.tutore_telefono.errors }}
+                    </div>
+                </div>
+            </div>
+
+            <hr class="divider">
+
+            <button type="submit" class="btn">Avanti →</button>
+        </form>
+
+        <p class="footer-note">La tua richiesta sarà esaminata dall'amministrazione.</p>
+    </div>
+
+    <script>
+        const field = document.getElementById("id_codice_fiscale");
+        const hint = document.getElementById("cf-hint");
+
+        const odd = { '0': 1, '1': 0, '2': 5, '3': 7, '4': 9, '5': 13, '6': 15, '7': 17, '8': 19, '9': 21, 'A': 1, 'B': 0, 'C': 5, 'D': 7, 'E': 9, 'F': 13, 'G': 15, 'H': 17, 'I': 19, 'J': 21, 'K': 2, 'L': 4, 'M': 18, 'N': 20, 'O': 11, 'P': 3, 'Q': 6, 'R': 8, 'S': 12, 'T': 14, 'U': 16, 'V': 10, 'W': 22, 'X': 25, 'Y': 24, 'Z': 23 };
+        const even = { '0': 0, '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, 'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4, 'F': 5, 'G': 6, 'H': 7, 'I': 8, 'J': 9, 'K': 10, 'L': 11, 'M': 12, 'N': 13, 'O': 14, 'P': 15, 'Q': 16, 'R': 17, 'S': 18, 'T': 19, 'U': 20, 'V': 21, 'W': 22, 'X': 23, 'Y': 24, 'Z': 25 };
+        const CF_REGEX = /^[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST]{1}[0-9LMNPQRSTUV]{2}[A-Z]{1}[0-9LMNPQRSTUV]{3}[A-Z]{1}$/;
+
+        field.addEventListener("input", function () {
+            const cf = field.value.toUpperCase();
+            field.value = cf;
+            if (!cf) { hint.textContent = ""; return; }
+            if (cf.length < 16) {
+                hint.style.color = "#f0a500";
+                hint.textContent = `⌛ ${cf.length}/16 caratteri`;
+                return;
+            }
+            if (!CF_REGEX.test(cf)) {
+                hint.style.color = "#e53935";
+                hint.textContent = "❌ Formato non valido";
+                return;
+            }
+            let total = 0;
+            for (let i = 0; i < 15; i++) {
+                total += (i + 1) % 2 === 0 ? even[cf[i]] : odd[cf[i]];
+            }
+            const expected = String.fromCharCode(total % 26 + 65);
+            if (cf[15] !== expected) {
+                hint.style.color = "#e53935";
+                hint.textContent = `❌ Carattere di controllo errato (atteso: ${expected})`;
+                return;
+            }
+            hint.style.color = "#43a047";
+            hint.textContent = "✅ Codice fiscale valido";
+        });
+    </script>
+    <script>
+        let comuniData = [];
+
+        // Store values from failed form submission
+        const selectedProvincia = "{{ form.provincia.value|default:'' }}";
+        const selectedComune = "{{ form.comune.value|default:'' }}";
+        const selectedCap = "{{ form.cap.value|default:'' }}";
+
+        fetch("{% static 'anagrafica/comuni.json' %}")
+            .then(r => r.json())
+            .then(data => {
+                comuniData = data;
+                if (selectedProvincia) {
+                    popolaComuni(selectedProvincia, selectedComune);
+                }
+                if (selectedCap) {
+                    document.getElementById("id_cap").value = selectedCap;
+                }
+            });
+
+        function popolaComuni(prov, selectedComune = "") {
+            const comuneSelect = document.getElementById("id_comune");
+            comuneSelect.innerHTML = '<option value="">— Seleziona comune —</option>';
+
+            const filtered = comuniData
+                .filter(c => c.provincia === prov)
+                .sort((a, b) => a.comune.localeCompare(b.comune));
+
+            filtered.forEach(c => {
+                const opt = document.createElement("option");
+                opt.value = c.comune;
+                opt.textContent = c.comune;
+                opt.dataset.cap = c.cap;
+                if (c.comune === selectedComune) opt.selected = true;
+                comuneSelect.appendChild(opt);
+            });
+        }
+
+        document.getElementById("id_provincia").addEventListener("change", function () {
+            document.getElementById("id_cap").value = "";
+            popolaComuni(this.value);
+        });
+
+        document.getElementById("id_comune").addEventListener("change", function () {
+            const selected = this.options[this.selectedIndex];
+            const capInput = document.getElementById("id_cap");
+            capInput.value = selected.dataset.cap || "";
+            capInput.style.background = "#fff";
+            capInput.removeAttribute("readonly");
+        });
+    </script>
+
+    <script>
+    function checkEta() {
+        const dataNascita = document.getElementById("id_data_nascita").value;
+        const tutoreSection = document.getElementById("tutore-section");
+        if (!dataNascita) {
+            tutoreSection.style.display = "none";
+            return;
+        }
+        const nascita = new Date(dataNascita);
+        const oggi = new Date();
+        let eta = oggi.getFullYear() - nascita.getFullYear();
+        const m = oggi.getMonth() - nascita.getMonth();
+        if (m < 0 || (m === 0 && oggi.getDate() < nascita.getDate())) eta--;
+
+        tutoreSection.style.display = eta < 18 ? "block" : "none";
+    }
+
+    document.getElementById("id_data_nascita").addEventListener("change", checkEta);
+
+    // On page load check in case of form re-render after error
+    document.addEventListener("DOMContentLoaded", checkEta);
+    </script>
+</body>
+
+</html>

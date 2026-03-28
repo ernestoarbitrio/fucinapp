@@ -1,0 +1,286 @@
+{% extends "admin/base_site.html" %}
+{% load dashboard_tags i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans "Home" %}</a>
+</div>
+{% endblock %}
+
+{% block content %}
+{% get_dashboard_stats as stats %}
+
+<style>
+    .app-list {
+        width: 35% !important;
+    }
+
+    .dashboard #content {
+        width: 90%;
+    }
+
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        margin-bottom: 32px;
+    }
+
+    .stat-card {
+        background: var(--body-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        border-top: 4px solid transparent;
+    }
+
+    .stat-card .number {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .stat-card .label {
+        color: var(--body-quiet-color);
+        margin-top: 6px;
+        font-size: 0.78rem;
+    }
+
+    .card-blue {
+        border-top-color: #1e88e5;
+    }
+
+    .card-blue .number {
+        color: #1e88e5;
+    }
+
+    .card-green {
+        border-top-color: #43a047;
+    }
+
+    .card-green .number {
+        color: #43a047;
+    }
+
+    .card-red {
+        border-top-color: #e53935;
+    }
+
+    .card-red .number {
+        color: #e53935;
+    }
+
+    .card-orange {
+        border-top-color: #f0a500;
+    }
+
+    .card-orange .number {
+        color: #f0a500;
+    }
+
+    .dash-section-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--body-fg);
+        margin: 0 0 10px;
+    }
+
+    .dash-tables {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .dash-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--body-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        overflow: hidden;
+        table-layout: fixed;
+    }
+
+    .dash-table thead {
+        background: var(--darkened-bg);
+    }
+
+    .dash-table th {
+        padding: 10px 12px;
+        text-align: left;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--body-quiet-color);
+        border-bottom: 1px solid var(--border-color);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .dash-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--body-fg);
+        font-size: 0.85rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .dash-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .dash-table tr:hover td {
+        background: var(--darkened-bg);
+    }
+
+    .dash-table a {
+        color: var(--link-fg);
+        text-decoration: none;
+    }
+
+    .dash-table a:hover {
+        text-decoration: underline;
+    }
+
+    .dash-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .badge-orange {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .badge-red {
+        background: #fce8e6;
+        color: #c62828;
+    }
+
+    .empty-row td {
+        text-align: center;
+        color: var(--body-quiet-color);
+        padding: 16px;
+        white-space: normal;
+    }
+
+    .dash-divider {
+        border: none;
+        border-top: 1px solid var(--border-color);
+        margin: 0 0 28px;
+    }
+</style>
+
+<!-- Django default app list + recent actions -->
+{{ block.super }}
+
+<hr class="dash-divider">
+
+<!-- Dashboard below -->
+<div class="content2">
+    <h2 style="color: var(--body-fg); margin: 0 0 16px;">📊 Riepilogo</h2>
+    <div class="stat-grid">
+        <div class="stat-card card-blue">
+            <div class="number">{{ stats.totale }}</div>
+            <div class="label">Soci totali</div>
+        </div>
+        <div class="stat-card card-green">
+            <div class="number">{{ stats.in_regola }}</div>
+            <div class="label">In regola</div>
+        </div>
+        <div class="stat-card card-red">
+            <div class="number">{{ stats.scaduti }}</div>
+            <div class="label">Quota scaduta</div>
+        </div>
+        <div class="stat-card card-orange">
+            <div class="number">{{ stats.nessuna_quota }}</div>
+            <div class="label">Nessuna quota</div>
+        </div>
+        <div class="stat-card card-orange">
+            <div class="number">{{ stats.in_scadenza }}</div>
+            <div class="label">In scadenza (30gg)</div>
+        </div>
+    </div>
+
+    <div class="dash-tables">
+        <div>
+            <div class="dash-section-title">⚠️ Ultimi 10 soci in scadenza (30 giorni)</div>
+            <table class="dash-table">
+                <colgroup>
+                    <col style="width:30%">
+                    <col style="width:38%">
+                    <col style="width:16%">
+                    <col style="width:16%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Socio</th>
+                        <th>Email</th>
+                        <th>Scadenza</th>
+                        <th>Giorni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for q in stats.quote_in_scadenza %}
+                    <tr>
+                        <td><a href="{% url 'admin:anagrafica_socio_change' q.socio.pk %}">{{ q.socio }}</a></td>
+                        <td>{{ q.socio.email }}</td>
+                        <td>{{ q.data_scadenza|date:"d/m/Y" }}</td>
+                        <td>
+                            {% if q.giorni_rimasti <= 7 %} <span class="dash-badge badge-red">{{ q.giorni_rimasti}}gg</span>
+                                {% else %}
+                                <span class="dash-badge badge-orange">{{ q.giorni_rimasti }}gg</span>
+                                {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr class="empty-row">
+                        <td colspan="4">✅ Nessuna quota in scadenza.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div>
+            <div class="dash-section-title">❌ Quota scaduta</div>
+            <table class="dash-table">
+                <colgroup>
+                    <col style="width:30%">
+                    <col style="width:40%">
+                    <col style="width:10%">
+                    <col style="width:20%">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>Socio</th>
+                        <th>Email</th>
+                        <th>Anno</th>
+                        <th>Scaduta il</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for socio in stats.soci_scaduti %}
+                    <tr>
+                        <td><a href="{% url 'admin:anagrafica_socio_change' socio.pk %}">{{ socio }}</a></td>
+                        <td>{{ socio.email }}</td>
+                        <td>{{ socio.ultima_quota.anno }}</td>
+                        <td><span class="dash-badge badge-red">{{ socio.ultima_quota.data_scadenza|date:"d/m/Y"}}</span></td>
+                    </tr>
+                    {% empty %}
+                    <tr class="empty-row">
+                        <td colspan="4">✅ Nessun socio con quota scaduta.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

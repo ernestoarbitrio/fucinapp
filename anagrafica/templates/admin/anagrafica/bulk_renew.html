@@ -1,0 +1,173 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<style>
+    .renew-form {
+        background: var(--body-bg);
+        border-radius: 12px;
+        padding: 32px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        border: 1px solid var(--border-color);
+    }
+
+    .renew-form h1 {
+        margin-top: 0;
+        font-size: 1.4rem;
+        color: var(--body-fg);
+    }
+
+    .field-row {
+        margin-bottom: 16px;
+    }
+
+    .field-row label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: var(--body-fg);
+    }
+
+    .field-row input,
+    .field-row select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 1rem;
+        background: var(--darkened-bg);
+        color: var(--body-fg);
+    }
+
+    .field-row input,
+    .field-row select {
+        width: 100%;
+        padding: 8px 12px;
+        height: 42px;
+        line-height: 1.5;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        font-size: 1rem;
+        background: var(--darkened-bg);
+        color: var(--body-fg);
+    }
+
+    .soci-list {
+        background: var(--darkened-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .soci-list div {
+        padding: 4px 0;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.9rem;
+        color: var(--body-fg);
+    }
+
+    .soci-list div:last-child {
+        border: none;
+    }
+
+    .btn-confirm {
+        background: var(--primary);
+        color: var(--primary-fg);
+        border: none;
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-size: 1rem;
+        cursor: pointer;
+    }
+
+    .btn-confirm:hover {
+        filter: brightness(1.1);
+    }
+
+    .btn-cancel {
+        background: var(--darkened-bg);
+        color: var(--body-fg);
+        border: 1px solid var(--border-color);
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-size: 1rem;
+        cursor: pointer;
+        margin-left: 8px;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .btn-cancel:hover {
+        filter: brightness(0.95);
+    }
+
+    .warning {
+        background: var(--darkened-bg);
+        border-left: 4px solid var(--warning-fg, #f0a500);
+        padding: 10px 14px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+        color: var(--body-fg);
+    }
+
+    p {
+        color: var(--body-fg);
+    }
+</style>
+
+<div class="renew-form">
+    <h1>♻️ Rinnovo quota massivo</h1>
+
+    <p>Stai per creare una quota per <strong>{{ soci|length }} soci</strong>:</p>
+
+    <div class="soci-list">
+        {% for socio in soci %}
+        <div>{{ socio.cognome }} {{ socio.nome }} — {{ socio.codice_fiscale }}</div>
+        {% endfor %}
+    </div>
+
+    {% if già_presenti %}
+    <div class="warning">
+        ⚠️ <strong>{{ già_presenti }} soci</strong> hanno già una quota per {{ anno }} e verranno saltati.
+    </div>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        {% for id in selected_ids %}
+        <input type="hidden" name="selected_ids" value="{{ id }}" />
+        {% endfor %}
+
+        <div class="field-row">
+            <label>Anno</label>
+            <input type="number" name="anno" value="{{ anno }}" required />
+        </div>
+        <div class="field-row">
+            <label>Importo (€)</label>
+            <input type="number" name="importo" value="{{ importo_default }}" step="0.01" min="0" required />
+        </div>
+        <div class="field-row">
+            <label>Data inizio validità</label>
+            <input type="date" name="data_inizio" value="{{ data_inizio }}" required />
+        </div>
+        <div class="field-row">
+            <label>Data scadenza</label>
+            <input type="date" name="data_scadenza" value="{{ data_scadenza }}" required />
+        </div>
+        <div class="field-row">
+            <label>Stato</label>
+            <select name="stato">
+                <option value="pagata">Pagata</option>
+                <option value="in_attesa">In attesa di pagamento</option>
+            </select>
+        </div>
+
+        <div style="margin-top:24px;">
+            <button type="submit" class="btn-confirm">✅ Conferma rinnovo</button>
+            <a href="{% url 'admin:anagrafica_socio_changelist' %}" class="btn-cancel">Annulla</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

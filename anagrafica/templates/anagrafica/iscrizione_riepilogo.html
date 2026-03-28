@@ -1,0 +1,244 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Riepilogo iscrizione — Fucinapp</title>
+    <link rel="stylesheet" href="{% static 'anagrafica/style.css' %}">
+</head>
+
+<body>
+    <div class="card">
+        <div class="logo">
+            <img src="{% static 'anagrafica/logo-fucina.jpeg' %}" alt="Fucina Salentina"
+                style="width:120px; height:auto; margin-bottom:12px;">
+            <p>Compila il modulo per richiedere l'iscrizione</p>
+        </div>
+
+        <!-- Steps indicator -->
+        <div class="steps">
+            <div class="step done">
+                <div class="dot">✓</div>
+                Dati personali
+            </div>
+            <div class="step-line done"></div>
+            <div class="step active">
+                <div class="dot">2</div>
+                Riepilogo e firma
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="dot">3</div>
+                Completato
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary">
+            <div class="summary-row">
+                <span class="key">Nome e Cognome</span>
+                <span class="val">{{ data.nome }} {{ data.cognome }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Data di nascita</span>
+                <span class="val">{{ data.data_nascita }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Luogo di nascita</span>
+                <span class="val">{{ data.luogo_nascita }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Codice Fiscale</span>
+                <span class="val">{{ data.codice_fiscale }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Via/Piazza</span>
+                <span class="val">{{ data.via }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Comune</span>
+                <span class="val">{{ data.comune }} ({{ data.provincia }}) — {{ data.cap }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Email</span>
+                <span class="val">{{ data.email }}</span>
+            </div>
+            {% if data.tutore_nome %}
+            <hr class="divider">
+            <div style="font-size:0.85rem; font-weight:700; color:#856404; margin-bottom:8px;">👤 Dati tutore legale
+            </div>
+            <div class="summary-row">
+                <span class="key">Nome e Cognome</span>
+                <span class="val">{{ data.tutore_nome }} {{ data.tutore_cognome }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Codice Fiscale</span>
+                <span class="val">{{ data.tutore_codice_fiscale }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Indirizzo</span>
+                <span class="val">{{ data.tutore_indirizzo }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="key">Email</span>
+                <span class="val">{{ data.tutore_email }}</span>
+            </div>
+            {% if data.tutore_telefono %}
+            <div class="summary-row">
+                <span class="key">Telefono</span>
+                <span class="val">{{ data.tutore_telefono }}</span>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+
+        <form method="post" id="riepilogo-form">
+            {% csrf_token %}
+
+            <div
+                style="background:#f9f9f9; border:1px solid #eee; border-radius:10px; padding:20px; margin-bottom:24px;">
+                <h3 style="font-size:0.95rem; font-weight:700; color:#2c5364; margin-bottom:10px;">
+                    📋 INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI
+                </h3>
+                <p style="font-size:0.85rem; color:#555; line-height:1.6; margin-bottom:16px;">
+                    Dichiaro che il titolare del trattamento dei dati personali è <strong>Fucina Salentina APS</strong>.
+                    Il Titolare tratta i dati personali nel rispetto della normativa prevista dal Regolamento (UE)
+                    2016/679.
+                </p>
+
+                <!-- Consenso trattamento - obbligatorio -->
+                <div style="margin-bottom:16px;">
+                    <p style="font-size:0.88rem; color:#333; margin-bottom:8px; line-height:1.5;">
+                        Letta l'informativa, acconsento al trattamento dei miei dati personali per le finalità
+                        legate alla gestione del tesseramento.
+                        <strong style="color:#e53935;">(Necessario per diventare soci)</strong>
+                    </p>
+                    <div style="display:flex; gap:24px;">
+                        <label
+                            style="display:flex; align-items:center; gap:6px; font-size:0.9rem; cursor:pointer; font-weight:600;">
+                            <input type="radio" name="consenso_trattamento" value="True" checked
+                                style="accent-color:#417690; width:16px; height:16px;"> Sì
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; gap:6px; font-size:0.9rem; cursor:pointer; font-weight:600;">
+                            <input type="radio" name="consenso_trattamento" value="False"
+                                style="accent-color:#e53935; width:16px; height:16px;"> No
+                        </label>
+                    </div>
+                    {% if error_trattamento %}
+                    <p style="color:#e53935; font-size:0.82rem; margin-top:6px;">⚠️ Il consenso al trattamento è
+                        obbligatorio.</p>
+                    {% endif %}
+                </div>
+
+                <hr style="border:none; border-top:1px solid #eee; margin:16px 0;">
+
+                <!-- Consenso marketing -->
+                <div style="margin-bottom:16px;">
+                    <p style="font-size:0.88rem; color:#333; margin-bottom:8px; line-height:1.5;">
+                        Acconsento all'invio di newsletter e comunicazioni promozionali relative alle
+                        attività dell'associazione. <strong style="color:#777;">(Facoltativo)</strong>
+                    </p>
+                    <div style="display:flex; gap:24px;">
+                        <label
+                            style="display:flex; align-items:center; gap:6px; font-size:0.9rem; cursor:pointer; font-weight:600;">
+                            <input type="radio" name="consenso_marketing" value="True" checked
+                                style="accent-color:#417690; width:16px; height:16px;"> Sì
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; gap:6px; font-size:0.9rem; cursor:pointer; font-weight:600;">
+                            <input type="radio" name="consenso_marketing" value="False"
+                                style="accent-color:#e53935; width:16px; height:16px;"> No
+                        </label>
+                    </div>
+                </div>
+
+                <hr style="border:none; border-top:1px solid #eee; margin:16px 0;">
+
+                <!-- Consenso immagini -->
+                <div>
+                    <p style="font-size:0.88rem; color:#333; margin-bottom:8px; line-height:1.5;">
+                        Acconsento all'uso di mie immagini fotografiche e video per fini di promozione
+                        associativa. <strong style="color:#777;">(Facoltativo)</strong>
+                    </p>
+                    <div style="display:flex; gap:24px;">
+                        <label
+                            style="display:flex; align-items:center; gap:6px; font-size:0.9rem; cursor:pointer; font-weight:600;">
+                            <input type="radio" name="consenso_immagini" value="True" checked
+                                style="accent-color:#417690; width:16px; height:16px;"> Sì
+                        </label>
+                        <label
+                            style="display:flex; align-items:center; gap:6px; font-size:0.9rem; cursor:pointer; font-weight:600;">
+                            <input type="radio" name="consenso_immagini" value="False"
+                                style="accent-color:#e53935; width:16px; height:16px;"> No
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <hr class="divider">
+
+            <!-- Signature -->
+            <div class="sig-label">✍️ Firma</div>
+            <div class="sig-wrapper {% if error_firma %}error{% endif %}" id="sig-wrapper">
+                <canvas id="signature-pad"></canvas>
+            </div>
+            <div class="sig-actions">
+                <button type="button" class="btn-clear" id="clear-sig">🗑 Cancella firma</button>
+            </div>
+            {% if error_firma %}
+            <p class="error-msg">⚠️ La firma è obbligatoria.</p>
+            {% endif %}
+            <input type="hidden" name="firma" id="firma-input">
+
+            <div class="btn-row">
+                <a href="{% url 'anagrafica:iscrizione' %}" class="btn btn-back">← Modifica</a>
+                <button type="submit" class="btn btn-submit">Conferma iscrizione →</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.5/dist/signature_pad.umd.min.js"></script>
+    <script>
+        const canvas = document.getElementById("signature-pad");
+        const wrapper = document.getElementById("sig-wrapper");
+        const sigInput = document.getElementById("firma-input");
+
+        // Resize canvas to match display size
+        function resizeCanvas() {
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            signaturePad.clear();
+        }
+
+        const signaturePad = new SignaturePad(canvas, {
+            backgroundColor: "rgb(255, 255, 255)",
+            penColor: "#222",
+        });
+
+        window.addEventListener("resize", resizeCanvas);
+        resizeCanvas();
+
+        document.getElementById("clear-sig").addEventListener("click", function () {
+            signaturePad.clear();
+            sigInput.value = "";
+            wrapper.classList.remove("error");
+        });
+
+        document.getElementById("riepilogo-form").addEventListener("submit", function (e) {
+            if (signaturePad.isEmpty()) {
+                e.preventDefault();
+                wrapper.classList.add("error");
+                wrapper.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+            }
+            sigInput.value = signaturePad.toDataURL();
+        });
+    </script>
+</body>
+
+</html>

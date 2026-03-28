@@ -1,0 +1,67 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verifica Socio</title>
+    <link rel="stylesheet" href="{% static 'anagrafica/style.css' %}">
+</head>
+<body>
+    <div class="card">
+        {% if in_regola %}
+            <div class="status green">✅ Socio in regola</div>
+        {% elif ultima_quota %}
+            <div class="status red">❌ Quota scaduta</div>
+        {% else %}
+            <div class="status orange">⚠️ Nessuna quota registrata</div>
+        {% endif %}
+
+        <hr class="divider">
+
+        <div class="row">
+            <span class="label">Nome</span>
+            <span class="value">{{ socio.nome_completo }}</span>
+        </div>
+        <div class="row">
+            <span class="label">Codice Fiscale</span>
+            <span class="value">{{ socio.codice_fiscale }}</span>
+        </div>
+        <div class="row">
+            <span class="label">Socio dal</span>
+            <span class="value">{{ socio.created_at|date:"d/m/Y" }}</span>
+        </div>
+
+        <hr class="divider">
+
+        {% if in_regola %}
+            <div class="row">
+                <span class="label">Stato quota</span>
+                <span class="badge badge-green">Pagata</span>
+            </div>
+            <div class="row">
+                <span class="label">Anno</span>
+                <span class="value">{{ quota.anno }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Valida fino al</span>
+                <span class="value">{{ quota.data_scadenza|date:"d/m/Y" }}</span>
+            </div>
+        {% elif ultima_quota %}
+            <div class="row">
+                <span class="label">Ultima quota</span>
+                <span class="badge badge-red">Scaduta il {{ ultima_quota.data_scadenza|date:"d/m/Y" }}</span>
+            </div>
+            <div class="row">
+                <span class="label">Anno</span>
+                <span class="value">{{ ultima_quota.anno }}</span>
+            </div>
+        {% else %}
+            <p style="color:#aaa; text-align:center;">Nessun pagamento registrato per questo socio.</p>
+        {% endif %}
+            <p class="footer-note">Verifica effettuata il {% now "d/m/Y H:i" %}</p>
+
+    </div>
+
+</body>
+</html>

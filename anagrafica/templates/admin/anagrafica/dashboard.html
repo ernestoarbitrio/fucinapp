@@ -1,0 +1,336 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans "Home" %}</a> ›
+    {% trans "Dashboard completa" %}
+</div>
+{% endblock %}
+
+{% block content_title %}
+<h1>📊 Dashboard completa</h1>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<style>
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        margin-bottom: 32px;
+    }
+    .stat-card {
+        background: var(--body-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        border-top: 4px solid transparent;
+    }
+    .stat-card .number { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .stat-card .label  { color: var(--body-quiet-color); margin-top: 6px; font-size: 0.78rem; }
+    .card-blue   { border-top-color: #1e88e5; } .card-blue   .number { color: #1e88e5; }
+    .card-green  { border-top-color: #43a047; } .card-green  .number { color: #43a047; }
+    .card-red    { border-top-color: #e53935; } .card-red    .number { color: #e53935; }
+    .card-orange { border-top-color: #f0a500; } .card-orange .number { color: #f0a500; }
+
+    /* Tabs */
+    .dash-tabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 2px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+    .dash-tab {
+        padding: 10px 24px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--body-quiet-color);
+        border: 1px solid transparent;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        margin-bottom: -2px;
+        background: transparent;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .dash-tab:hover {
+        color: var(--body-fg);
+        background: var(--darkened-bg);
+    }
+    .dash-tab.active {
+        color: var(--body-fg);
+        background: var(--body-bg);
+        border-color: var(--border-color);
+        border-bottom-color: var(--body-bg);
+    }
+    .dash-tab .tab-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 20px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        background: var(--darkened-bg);
+        color: var(--body-quiet-color);
+    }
+    .dash-tab.active .tab-count {
+        background: var(--primary);
+        color: white;
+    }
+
+    .dash-panel { display: none; }
+    .dash-panel.active { display: block; }
+
+    .dash-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-orange { background: #fff3cd; color: #856404; }
+    .badge-red    { background: #fce8e6; color: #c62828; }
+
+    /* DataTables overrides */
+    .dataTables_wrapper {
+        font-size: 0.88rem;
+        color: var(--body-fg);
+    }
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select {
+        background: var(--darkened-bg);
+        color: var(--body-fg);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 4px 8px;
+        margin-left: 4px;
+    }
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_filter label,
+    .dataTables_wrapper .dataTables_length label {
+        color: var(--body-quiet-color);
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        color: var(--body-fg) !important;
+        border-radius: 4px;
+        border: none !important;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+        background: var(--primary) !important;
+        color: white !important;
+        border: none !important;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+        background: var(--darkened-bg) !important;
+        color: var(--body-fg) !important;
+        border: none !important;
+    }
+    table.dataTable {
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        overflow: hidden;
+        width: 100% !important;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    table.dataTable thead th {
+        background: var(--darkened-bg);
+        color: var(--body-quiet-color);
+        border-bottom: 1px solid var(--border-color) !important;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 10px 12px;
+    }
+    table.dataTable tbody td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--body-fg);
+        background: var(--body-bg);
+    }
+    table.dataTable tbody tr:last-child td { border-bottom: none; }
+    table.dataTable tbody tr:hover td { background: var(--darkened-bg) !important; }
+    table.dataTable a { color: var(--link-fg); text-decoration: none; }
+    table.dataTable a:hover { text-decoration: underline; }
+    table.dataTable.no-footer { border-bottom: 1px solid var(--border-color); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Stats -->
+<div class="stat-grid">
+    <div class="stat-card card-blue">
+        <div class="number">{{ totale }}</div>
+        <div class="label">Soci totali</div>
+    </div>
+    <div class="stat-card card-green">
+        <div class="number">{{ in_regola }}</div>
+        <div class="label">In regola</div>
+    </div>
+    <div class="stat-card card-red">
+        <div class="number">{{ scaduti }}</div>
+        <div class="label">Quota scaduta</div>
+    </div>
+    <div class="stat-card card-orange">
+        <div class="number">{{ nessuna_quota }}</div>
+        <div class="label">Nessuna quota</div>
+    </div>
+    <div class="stat-card card-orange">
+        <div class="number">{{ in_scadenza }}</div>
+        <div class="label">In scadenza (30gg)</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="dash-tabs">
+    <button class="dash-tab active" data-tab="scadenza">
+        ⚠️ In scadenza
+        <span class="tab-count">{{ in_scadenza }}</span>
+    </button>
+    <button class="dash-tab" data-tab="scaduta">
+        ❌ Quota scaduta
+        <span class="tab-count">{{ scaduti }}</span>
+    </button>
+    <button class="dash-tab" data-tab="senza">
+        🚫 Senza quota
+        <span class="tab-count">{{ nessuna_quota }}</span>
+    </button>
+</div>
+
+<!-- Tab: In scadenza -->
+<div class="dash-panel active" id="panel-scadenza">
+    <table id="table-scadenza">
+        <thead>
+            <tr>
+                <th>Socio</th>
+                <th>Email</th>
+                <th>Anno</th>
+                <th>Scadenza</th>
+                <th>Giorni rimasti</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in quote_in_scadenza %}
+            <tr>
+                <td><a href="{% url 'admin:anagrafica_socio_change' q.socio.pk %}">{{ q.socio }}</a></td>
+                <td>{{ q.socio.email }}</td>
+                <td>{{ q.anno }}</td>
+                <td data-order="{{ q.data_scadenza|date:'Y-m-d' }}">{{ q.data_scadenza|date:"d/m/Y" }}</td>
+                <td data-order="{{ q.giorni_rimasti }}">
+                    {% if q.giorni_rimasti <= 7 %}
+                        <span class="dash-badge badge-red">{{ q.giorni_rimasti }}gg</span>
+                    {% else %}
+                        <span class="dash-badge badge-orange">{{ q.giorni_rimasti }}gg</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" style="text-align:center; color:var(--body-quiet-color); padding:16px;">✅ Nessuna quota in scadenza.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Tab: Quota scaduta -->
+<div class="dash-panel" id="panel-scaduta">
+    <table id="table-scaduta">
+        <thead>
+            <tr>
+                <th>Socio</th>
+                <th>Email</th>
+                <th>Anno</th>
+                <th>Scaduta il</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for socio in soci_scaduti %}
+            <tr>
+                <td><a href="{% url 'admin:anagrafica_socio_change' socio.pk %}">{{ socio }}</a></td>
+                <td>{{ socio.email }}</td>
+                <td>{{ socio.ultima_quota.anno }}</td>
+                <td data-order="{{ socio.ultima_quota.data_scadenza|date:'Y-m-d' }}">
+                    <span class="dash-badge badge-red">{{ socio.ultima_quota.data_scadenza|date:"d/m/Y" }}</span>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" style="text-align:center; color:var(--body-quiet-color); padding:16px;">✅ Nessun socio con quota scaduta.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Tab: Senza quota -->
+<div class="dash-panel" id="panel-senza">
+    <table id="table-senza">
+        <thead>
+            <tr>
+                <th>Socio</th>
+                <th>Email</th>
+                <th>Iscritto il</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for socio in soci_senza_quota %}
+            <tr>
+                <td><a href="{% url 'admin:anagrafica_socio_change' socio.pk %}">{{ socio }}</a></td>
+                <td>{{ socio.email }}</td>
+                <td data-order="{{ socio.created_at|date:'Y-m-d' }}">{{ socio.created_at|date:"d/m/Y" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+$(document).ready(function () {
+    const lang = {
+        search: "Cerca:",
+        lengthMenu: "Mostra _MENU_ righe",
+        info: "Da _START_ a _END_ di _TOTAL_ risultati",
+        infoEmpty: "Nessun risultato",
+        infoFiltered: "(filtrati da _MAX_ totali)",
+        paginate: { first: "«", last: "»", next: "›", previous: "‹" },
+        emptyTable: "Nessun dato disponibile",
+        zeroRecords: "Nessun risultato trovato",
+    };
+
+    const dt1 = $("#table-scadenza").DataTable({ language: lang, pageLength: 10, order: [[3, "asc"]] });
+    const dt2 = $("#table-scaduta").DataTable({ language: lang, pageLength: 10, order: [[3, "asc"]] });
+    const dt3 = $("#table-senza").DataTable({ language: lang, pageLength: 10, order: [[0, "asc"]] });
+
+    // Tab switching
+    $(".dash-tab").on("click", function () {
+        const tab = $(this).data("tab");
+
+        $(".dash-tab").removeClass("active");
+        $(".dash-panel").removeClass("active");
+
+        $(this).addClass("active");
+        $("#panel-" + tab).addClass("active");
+
+        // Redraw DataTable when tab becomes visible
+        if (tab === "scadenza") dt1.columns.adjust().draw(false);
+        if (tab === "scaduta")  dt2.columns.adjust().draw(false);
+        if (tab === "senza")    dt3.columns.adjust().draw(false);
+    });
+});
+</script>
+{% endblock %}

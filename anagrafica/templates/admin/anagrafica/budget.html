@@ -1,0 +1,384 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+{% load dashboard_tags %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans "Home" %}</a> ›
+    {% trans "Budget" %}
+</div>
+{% endblock %}
+
+{% block content_title %}
+<h1>💰 Budget</h1>
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+<style>
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 32px;
+    }
+    .stat-card {
+        background: var(--body-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        border-top: 4px solid transparent;
+    }
+    .stat-card .number { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+    .stat-card .number .currency { font-size: 1rem; font-weight: 400; margin-right: 2px; }
+    .stat-card .label { color: var(--body-quiet-color); margin-top: 6px; font-size: 0.78rem; }
+    .card-blue   { border-top-color: #1e88e5; } .card-blue   .number { color: #1e88e5; }
+    .card-green  { border-top-color: #43a047; } .card-green  .number { color: #43a047; }
+    .card-orange { border-top-color: #f0a500; } .card-orange .number { color: #f0a500; }
+    .card-purple { border-top-color: #8e24aa; } .card-purple .number { color: #8e24aa; }
+
+    .dash-tabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 2px solid var(--border-color);
+        margin-bottom: 24px;
+    }
+    .dash-tab {
+        padding: 10px 24px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--body-quiet-color);
+        border: 1px solid transparent;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        margin-bottom: -2px;
+        background: transparent;
+        transition: all 0.15s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .dash-tab:hover { color: var(--body-fg); background: var(--darkened-bg); }
+    .dash-tab.active {
+        color: var(--body-fg);
+        background: var(--body-bg);
+        border-color: var(--border-color);
+        border-bottom-color: var(--body-bg);
+    }
+    .tab-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 20px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        background: var(--darkened-bg);
+        color: var(--body-quiet-color);
+    }
+    .dash-tab.active .tab-count {
+        background: var(--primary);
+        color: white;
+    }
+
+    .dash-panel { display: none; }
+    .dash-panel.active { display: block; }
+
+    .year-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 24px;
+    }
+    .year-table thead { background: var(--darkened-bg); }
+    .year-table th {
+        padding: 10px 16px;
+        text-align: left;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--body-quiet-color);
+        border-bottom: 1px solid var(--border-color);
+    }
+    .year-table td {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--body-fg);
+        font-size: 0.9rem;
+    }
+    .year-table tr:last-child td { border-bottom: none; }
+    .year-table tr:hover td { background: var(--darkened-bg); }
+    .year-table .current-year td { font-weight: 600; }
+
+    .amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .amount-green  { color: #43a047; }
+    .amount-orange { color: #f0a500; }
+
+    .progress-bar-bg {
+        background: var(--darkened-bg);
+        border-radius: 4px;
+        height: 8px;
+        width: 100%;
+        overflow: hidden;
+    }
+    .progress-bar-fill {
+        height: 100%;
+        border-radius: 4px;
+        background: #43a047;
+        transition: width 0.4s ease;
+    }
+
+    .dash-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    .badge-green  { background: #e6f4ea; color: #2e7d32; }
+    .badge-orange { background: #fff3cd; color: #856404; }
+
+    /* DataTables overrides */
+    .dataTables_wrapper { font-size: 0.88rem; color: var(--body-fg); }
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select {
+        background: var(--darkened-bg);
+        color: var(--body-fg);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 4px 8px;
+        margin-left: 4px;
+    }
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_filter label,
+    .dataTables_wrapper .dataTables_length label { color: var(--body-quiet-color); }
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        color: var(--body-fg) !important;
+        border-radius: 4px;
+        border: none !important;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+        background: var(--primary) !important;
+        color: white !important;
+        border: none !important;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+        background: var(--darkened-bg) !important;
+        color: var(--body-fg) !important;
+        border: none !important;
+    }
+    table.dataTable {
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        overflow: hidden;
+        width: 100% !important;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    table.dataTable thead th {
+        background: var(--darkened-bg);
+        color: var(--body-quiet-color);
+        border-bottom: 1px solid var(--border-color) !important;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 10px 12px;
+    }
+    table.dataTable tbody td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border-color);
+        color: var(--body-fg);
+        background: var(--body-bg);
+    }
+    table.dataTable tbody tr:last-child td { border-bottom: none; }
+    table.dataTable tbody tr:hover td { background: var(--darkened-bg) !important; }
+    table.dataTable a { color: var(--link-fg); text-decoration: none; }
+    table.dataTable a:hover { text-decoration: underline; }
+    table.dataTable.no-footer { border-bottom: 1px solid var(--border-color); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="stat-grid">
+    <div class="stat-card card-green">
+        <div class="number">{{ totale_incassato|currency_it }}</div>
+        <div class="label">Totale incassato</div>
+    </div>
+    <div class="stat-card card-blue">
+        <div class="number">{{ totale_anno|currency_it }}</div>
+        <div class="label">Incassato {{ anno_corrente }}</div>
+    </div>
+    <div class="stat-card card-orange">
+        <div class="number">{{ totale_attesa|currency_it }}</div>
+        <div class="label">In attesa di pagamento</div>
+    </div>
+    <div class="stat-card card-purple">
+        <div class="number">{{ media_quota|currency_it }}</div>
+        <div class="label">Media quota pagata</div>
+    </div>
+</div>
+
+<div class="dash-tabs">
+    <button class="dash-tab active" data-tab="anno">
+        📅 Per anno
+    </button>
+    <button class="dash-tab" data-tab="pagate">
+        ✅ Pagate {{ anno_corrente }}
+        <span class="tab-count">{{ quote_pagate_anno|length }}</span>
+    </button>
+    <button class="dash-tab" data-tab="attesa">
+        ⏳ In attesa
+        <span class="tab-count">{{ quote_in_attesa|length }}</span>
+    </button>
+</div>
+
+<!-- Tab: Per anno -->
+<div class="dash-panel active" id="panel-anno">
+    <table class="year-table">
+        <thead>
+            <tr>
+                <th>Anno</th>
+                <th>Numero quote</th>
+                <th>Totale incassato</th>
+                <th>% sul totale</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in per_anno %}
+            <tr {% if row.anno == anno_corrente %}class="current-year"{% endif %}>
+                <td>
+                    {{ row.anno }}
+                    {% if row.anno == anno_corrente %}
+                        <span class="dash-badge badge-green">Anno corrente</span>
+                    {% endif %}
+                </td>
+                <td>{{ row.numero }}</td>
+                <td class="amount amount-green">€ {{ row.totale }}</td>
+                <td>
+                    {% if totale_incassato %}
+                        {% widthratio row.totale totale_incassato 100 as pct %}
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <div class="progress-bar-bg" style="flex:1;">
+                                <div class="progress-bar-fill" style="width:{{ pct }}%;"></div>
+                            </div>
+                            <span style="font-size:0.8rem; color:var(--body-quiet-color); min-width:36px;">{{ pct }}%</span>
+                        </div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" style="text-align:center; color:var(--body-quiet-color); padding:16px;">
+                    Nessuna quota registrata.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Tab: Pagate anno corrente -->
+<div class="dash-panel" id="panel-pagate">
+    <table id="table-pagate">
+        <thead>
+            <tr>
+                <th>Socio</th>
+                <th>Email</th>
+                <th>Importo</th>
+                <th>Data pagamento</th>
+                <th>Scadenza</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in quote_pagate_anno %}
+            <tr>
+                <td><a href="{% url 'admin:anagrafica_socio_change' q.socio.pk %}">{{ q.socio }}</a></td>
+                <td>{{ q.socio.email }}</td>
+                <td data-order="{{ q.importo }}" class="amount amount-green">€ {{ q.importo }}</td>
+                <td data-order="{{ q.data_pagamento|date:'Y-m-d' }}">{{ q.data_pagamento|date:"d/m/Y" }}</td>
+                <td data-order="{{ q.data_scadenza|date:'Y-m-d' }}">{{ q.data_scadenza|date:"d/m/Y" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Tab: In attesa -->
+<div class="dash-panel" id="panel-attesa">
+    <table id="table-attesa">
+        <thead>
+            <tr>
+                <th>Socio</th>
+                <th>Email</th>
+                <th>Anno</th>
+                <th>Importo atteso</th>
+                <th>Scadenza</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for q in quote_in_attesa %}
+            <tr>
+                <td><a href="{% url 'admin:anagrafica_socio_change' q.socio.pk %}">{{ q.socio }}</a></td>
+                <td>{{ q.socio.email }}</td>
+                <td>{{ q.anno }}</td>
+                <td data-order="{{ q.importo }}" class="amount amount-orange">€ {{ q.importo }}</td>
+                <td data-order="{{ q.data_scadenza|date:'Y-m-d' }}">{{ q.data_scadenza|date:"d/m/Y" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script>
+$(document).ready(function () {
+    const lang = {
+        search: "Cerca:",
+        lengthMenu: "Mostra _MENU_ righe",
+        info: "Da _START_ a _END_ di _TOTAL_ risultati",
+        infoEmpty: "Nessun risultato",
+        infoFiltered: "(filtrati da _MAX_ totali)",
+        paginate: { first: "«", last: "»", next: "›", previous: "‹" },
+        emptyTable: "Nessun dato disponibile",
+        zeroRecords: "Nessun risultato trovato",
+    };
+
+    const dt1 = $("#table-pagate").DataTable({
+        language: lang,
+        pageLength: 10,
+        order: [[3, "desc"]],
+    });
+
+    const dt2 = $("#table-attesa").DataTable({
+        language: lang,
+        pageLength: 10,
+        order: [[4, "asc"]],
+    });
+
+    $(".dash-tab").on("click", function () {
+        const tab = $(this).data("tab");
+        $(".dash-tab").removeClass("active");
+        $(".dash-panel").removeClass("active");
+        $(this).addClass("active");
+        $("#panel-" + tab).addClass("active");
+        if (tab === "pagate") dt1.columns.adjust().draw(false);
+        if (tab === "attesa") dt2.columns.adjust().draw(false);
+    });
+});
+</script>
+{% endblock %}

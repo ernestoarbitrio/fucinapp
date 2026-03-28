@@ -1,0 +1,98 @@
+{% extends "admin/change_form.html" %}
+
+{% block after_field_sets %}
+
+{% if not original or not original.firma %}
+<style>
+    .firma-admin-section {
+        background: var(--body-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+    .firma-admin-section h3 {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--body-fg);
+        margin-bottom: 12px;
+    }
+    .sig-wrapper {
+        border: 2px solid var(--border-color);
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fafafa;
+        margin-bottom: 8px;
+    }
+    #admin-signature-pad {
+        display: block;
+        width: 100%;
+        height: 160px;
+        cursor: crosshair;
+        touch-action: none;
+    }
+    .sig-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .btn-sig-clear {
+        padding: 6px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--darkened-bg);
+        color: var(--body-fg);
+        cursor: pointer;
+        font-size: 0.85rem;
+    }
+</style>
+
+<div class="firma-admin-section">
+    <h3>✍️ Aggiungi firma</h3>
+    <div class="sig-wrapper">
+        <canvas id="admin-signature-pad"></canvas>
+    </div>
+    <div class="sig-actions">
+        <button type="button" class="btn-sig-clear" id="clear-admin-sig">🗑 Cancella</button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.5/dist/signature_pad.umd.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const canvas = document.getElementById("admin-signature-pad");
+
+    function resizeCanvas() {
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext("2d").scale(ratio, ratio);
+        signaturePad.clear();
+    }
+
+    const signaturePad = new SignaturePad(canvas, {
+        backgroundColor: "rgb(255,255,255)",
+        penColor: "#222",
+    });
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    document.getElementById("clear-admin-sig").addEventListener("click", function () {
+        signaturePad.clear();
+    });
+
+    const form = document.querySelector("#content-main form");
+    form.addEventListener("submit", function () {
+        if (!signaturePad.isEmpty()) {
+            let input = form.querySelector('input[name="firma"]');
+            if (!input) {
+                input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "firma";
+                form.appendChild(input);
+            }
+            input.value = signaturePad.toDataURL();
+        }
+    });
+});
+</script>
+{% endif %}
+
+{% endblock %}
