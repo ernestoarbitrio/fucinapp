@@ -11,6 +11,7 @@ from django.dispatch import receiver
 from django.utils import timezone
 
 TIPO_CHOICES = [
+    ("SS", "Socio Sostenitore"),
     ("VP", "Vice Presidente"),
     ("CO", "Consigliere"),
     ("SG", "Segretario"),
@@ -52,7 +53,7 @@ class Socio(models.Model):
         verbose_name="Telefono", max_length=20, blank=True, null=True
     )
     tipo = models.CharField(
-        verbose_name="Tipo socio", max_length=2, choices=TIPO_CHOICES, default="SO"
+        verbose_name="Tipo socio", max_length=2, choices=TIPO_CHOICES, default="SS"
     )
     tutore_nome = models.CharField(
         verbose_name="Nome tutore", max_length=100, blank=True, null=True

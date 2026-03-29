@@ -388,6 +388,7 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
                     "data_nascita",
                     "luogo_nascita",
                     "codice_fiscale",
+                    "tipo",
                 )
             },
         ),
