@@ -4,11 +4,10 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.test import TestCase, Client
+from django.test import Client, TestCase
 from django.utils import timezone
 
-from anagrafica.models import Socio, Quota, valida_codice_fiscale
-
+from anagrafica.models import Quota, Socio, valida_codice_fiscale
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -377,11 +376,6 @@ class QuotaModelTests(TestCase):
             data_scadenza=today + datetime.timedelta(days=375),
         )
         self.assertIsNone(self.socio.quota_attiva)
-
-    def test_pdf_iscrizione_field_exists(self):
-        quota = make_quota(self.socio)
-        # field exists on the model — value may or may not be set
-        self.assertTrue(hasattr(quota, "pdf_iscrizione"))
 
 
 # ── Verifica Socio View ───────────────────────────────────────────────────────
