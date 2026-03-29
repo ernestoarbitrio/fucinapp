@@ -215,9 +215,6 @@ class Quota(models.Model):
         verbose_name="Inizio validità", null=True, blank=True
     )
     data_scadenza = models.DateField(verbose_name="Scadenza", null=True, blank=True)
-    pdf_iscrizione = models.FileField(
-        verbose_name="PDF iscrizione", upload_to="soci/pdf/", null=True, blank=True
-    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

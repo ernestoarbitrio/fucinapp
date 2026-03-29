@@ -4,23 +4,21 @@ import os
 from datetime import date, timedelta
 
 from django.conf import settings
-from django.core.files.base import ContentFile
-
-from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import CondPageBreak
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import cm
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import cm
 from reportlab.platypus import (
-    SimpleDocTemplate,
+    CondPageBreak,
+    HRFlowable,
+    Image,
     Paragraph,
+    SimpleDocTemplate,
     Spacer,
     Table,
     TableStyle,
-    Image,
-    HRFlowable,
 )
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_JUSTIFY
 
 from configurazione.models import Configurazione
 
@@ -291,14 +289,12 @@ def genera_pdf_iscrizione(socio, quota):
 
     doc.build(story, onFirstPage=add_footer, onLaterPages=add_footer)
     buffer.seek(0)
-
-    filename = f"iscrizione_{socio.codice_fiscale}_{quota.anno}.pdf"
-    quota.pdf_iscrizione.save(filename, ContentFile(buffer.read()), save=True)
+    return buffer
 
 
 def genera_pdf_elenco_soci(soci_queryset):
-    from reportlab.platypus import LongTable
     from reportlab.pdfgen import canvas as rl_canvas
+    from reportlab.platypus import LongTable
 
     config = Configurazione.get()
 

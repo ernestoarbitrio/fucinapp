@@ -1,22 +1,20 @@
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.contrib.admin import SimpleListFilter
+from django.forms import HiddenInput
+from django.http import FileResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import path, reverse
+from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
-from django.forms import HiddenInput
-from django.contrib.admin import SimpleListFilter
-from django.utils import timezone
-from django.urls import path, reverse
-from django.http import HttpResponseRedirect
-from django.contrib import messages
+from import_export import fields, resources
 from import_export.admin import ExportMixin
-from anagrafica.forms import PROVINCE_ITALIANE
-from anagrafica.models import Socio, Quota
-from anagrafica.models import valida_codice_fiscale
-from import_export import resources, fields
 from import_export.formats.base_formats import XLSX
-from anagrafica.pdf_utils import genera_pdf_elenco_soci
-from django.http import FileResponse
+
+from anagrafica.forms import PROVINCE_ITALIANE
+from anagrafica.models import Quota, Socio, valida_codice_fiscale
+from anagrafica.pdf_utils import genera_pdf_elenco_soci, genera_pdf_iscrizione
 
 MODAL_HTML = """
 <div id="qr-modal-overlay" style="
@@ -347,16 +345,8 @@ class QuotaInline(admin.StackedInline):
     def pdf_link(self, obj):
         if not obj.pk:
             return "-"
-        if obj.pdf_iscrizione:
-            return format_html(
-                '<a href="{}" target="_blank" style="margin-right:8px;">📄 Scarica</a>',
-                obj.pdf_iscrizione.url,
-                reverse(
-                    "admin:anagrafica_socio_genera_pdf", args=[obj.socio_id, obj.pk]
-                ),
-            )
         return format_html(
-            '<a href="{}">📄 Genera PDF</a>',
+            '<a href="{}" target="_blank">📄 Genera PDF</a>',
             reverse("admin:anagrafica_socio_genera_pdf", args=[obj.socio_id, obj.pk]),
         )
 
@@ -567,21 +557,25 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
         socio = get_object_or_404(Socio, pk=socio_id)
         quota = get_object_or_404(Quota, pk=quota_id, socio=socio)
         try:
-            from anagrafica.pdf_utils import genera_pdf_iscrizione
-
-            genera_pdf_iscrizione(socio, quota)
-            messages.success(request, f"✅ PDF generato per la quota {quota.anno}.")
+            buffer = genera_pdf_iscrizione(socio, quota)
+            return FileResponse(
+                buffer,
+                as_attachment=False,
+                filename=f"iscrizione_{socio.codice_fiscale}_{quota.anno}.pdf",
+                content_type="application/pdf",
+            )
         except Exception as e:
             messages.error(request, f"Errore nella generazione del PDF: {e}")
-        return HttpResponseRedirect(
-            reverse("admin:anagrafica_socio_change", args=[socio_id])
-        )
+            return HttpResponseRedirect(
+                reverse("admin:anagrafica_socio_change", args=[socio_id])
+            )
 
     @admin.action(description="📋 Esporta registro soci PDF")
     def export_registro_soci_pdf(self, request, queryset):
-        from anagrafica.pdf_utils import genera_pdf_elenco_soci
         from django.http import FileResponse
         from django.utils import timezone
+
+        from anagrafica.pdf_utils import genera_pdf_elenco_soci
 
         soci = (
             queryset.filter(approvato=True)
@@ -648,3 +642,9 @@ class QuotaAdmin(admin.ModelAdmin):
         return mark_safe(
             '<span style="color:orange; font-weight:bold;">⏳ Non pagata</span>'
         )
+
+    def save_model(self, request, obj, form, change):
+        if change and obj.pdf_iscrizione:
+            obj.pdf_iscrizione.delete(save=False)
+            obj.pdf_iscrizione = None
+        super().save_model(request, obj, form, change)
