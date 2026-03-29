@@ -389,3 +389,14 @@ canvas#signature-pad {
     font-size: 0.78rem;
     color: #bbb;
 }
+
+@media (max-width: 480px) {
+    .step span { display: none; }
+    .step-line { width: 24px; }
+
+    input[type="date"] {
+        font-size: 16px; /* prevents iOS zoom on focus */
+        padding: 8px 10px;
+        -webkit-appearance: none;
+    }
+}

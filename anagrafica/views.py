@@ -249,9 +249,11 @@ def iscrizione_riepilogo(request):
         form = IscrizioneForm(form_data)
         if form.is_valid():
             socio = form.save(commit=False)
-            socio.approvato = False
+            socio.approvato = True
             socio.firma = request.POST.get("firma")
             socio.save()
+            socio.genera_qr_code()
+            socio.save(update_fields=["qr_code"])
             del request.session["iscrizione_data"]
             return redirect("anagrafica:iscrizione_completata")
 
