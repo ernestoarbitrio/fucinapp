@@ -3,5 +3,5 @@ builder = "NIXPACKS"
 buildCommand = "./build.sh"
 
 [deploy]
-startCommand = "gunicorn fucinapp.wsgi:application --bind 0.0.0.0:$PORT"
+startCommand = "gunicorn registro_soci.wsgi:application --bind 0.0.0.0:$PORT"
 restartPolicyType = "ON_FAILURE"

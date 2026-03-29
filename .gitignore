@@ -12,3 +12,4 @@ wheels/
 .vscode
 .ruff_cache
 media
+db.sqlite3
