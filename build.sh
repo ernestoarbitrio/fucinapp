@@ -8,4 +8,4 @@ if not U.objects.filter(username=os.environ['DJANGO_SUPERUSER_USERNAME']).exists
         os.environ['DJANGO_SUPERUSER_EMAIL'],
         os.environ['DJANGO_SUPERUSER_PASSWORD']
     )
-" && gunicorn fucinapp.wsgi:application --bind 0.0.0.0:$PORT
+" && gunicorn registro_soci.wsgi:application --bind 0.0.0.0:$PORT
