@@ -57,9 +57,7 @@ def invia_email_iscrizione(socio, quota):
 </html>
         """
         resend.api_key = settings.RESEND_API_KEY
-
         pdf_tessera = genera_pdf_tessera(socio, quota)
-
         resend.Emails.send(
             {
                 "from": settings.DEFAULT_FROM_EMAIL,
@@ -69,28 +67,13 @@ def invia_email_iscrizione(socio, quota):
                 "attachments": [
                     {
                         "filename": f"tessera_{socio.cognome}_{socio.nome}.pdf",
-                        "content": base64.b64encode(pdf_tessera).decode("utf-8"),
+                        "content": base64.b64encode(pdf_tessera.getvalue()).decode(
+                            "utf-8"
+                        ),
                     }
                 ],
             }
         )
-        # email = EmailMultiAlternatives(
-        #     subject=subject,
-        #     body=text_body,
-        #     from_email=settings.DEFAULT_FROM_EMAIL,
-        #     to=[socio.email],
-        # )
-        # email.attach_alternative(html_body, "text/html")
-
-        # # Attach tessera PDF
-        # pdf_tessera = genera_pdf_tessera(socio, quota)
-        # email.attach(
-        #     f"tessera_{socio.codice_fiscale}_{quota.anno}.pdf",
-        #     pdf_tessera.read(),
-        #     "application/pdf",
-        # )
-
-        # email.send()
 
     except Exception as e:
         import logging
