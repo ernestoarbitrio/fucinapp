@@ -43,7 +43,6 @@ def invia_email_iscrizione(socio, quota):
         <tr><td>Email</td><td>{socio.email}</td></tr>
         <tr><td>N° Tessera</td><td>{quota.pk}</td></tr>
         <tr><td>Anno</td><td>{quota.anno}</td></tr>
-        <tr><td>Stato quota</td><td>{quota.get_stato_display()}</td></tr>
     </table>
 
     <p>In allegato trovi la tua tessera associativa.</p>
