@@ -2,8 +2,12 @@
 #    uv pip compile pyproject.toml -o requirements.txt
 asgiref==3.11.1
     # via django
+certifi==2026.2.25
+    # via requests
 charset-normalizer==3.4.6
-    # via reportlab
+    # via
+    #   reportlab
+    #   requests
 diff-match-patch==20241021
     # via django-import-export
 dj-database-url==3.1.2
@@ -19,6 +23,8 @@ et-xmlfile==2.0.0
     # via openpyxl
 gunicorn==25.3.0
     # via fucinapp (pyproject.toml)
+idna==3.11
+    # via requests
 openpyxl==3.1.5
     # via tablib
 packaging==26.0
@@ -33,11 +39,19 @@ qrcode==8.2
     # via fucinapp (pyproject.toml)
 reportlab==4.4.10
     # via fucinapp (pyproject.toml)
+requests==2.33.1
+    # via resend
+resend==2.26.0
+    # via fucinapp (pyproject.toml)
 sqlparse==0.5.5
     # via django
 tablib==3.9.0
     # via
     #   fucinapp (pyproject.toml)
     #   django-import-export
+typing-extensions==4.15.0
+    # via resend
+urllib3==2.6.3
+    # via requests
 whitenoise==6.12.0
     # via fucinapp (pyproject.toml)
