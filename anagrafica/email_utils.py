@@ -1,36 +1,17 @@
+import base64
+
+import resend
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives
+
+from anagrafica.pdf_utils import genera_pdf_tessera
+from configurazione.models import Configurazione
 
 
 def invia_email_iscrizione(socio, quota):
     try:
-        from anagrafica.pdf_utils import genera_pdf_tessera
-        from configurazione.models import Configurazione
-
         config = Configurazione.get()
 
         subject = f"Conferma iscrizione — {config.nome_associazione}"
-
-        text_body = f"""
-Gentile {socio.nome_completo},
-
-la tua iscrizione a {config.nome_associazione} è stata completata con successo.
-
-Riepilogo:
-- Nome: {socio.nome_completo}
-- Codice Fiscale: {socio.codice_fiscale}
-- Email: {socio.email}
-- N° Tessera: {quota.pk}
-- Anno: {quota.anno}
-- Stato quota: {quota.get_stato_display()}
-
-In allegato trovi: La tua tessera associativa
-
-Per qualsiasi informazione contattaci a {config.email}.
-
-Cordiali saluti,
-{config.nome_associazione}
-        """.strip()
 
         html_body = f"""
 <!DOCTYPE html>
@@ -75,24 +56,41 @@ Cordiali saluti,
 </body>
 </html>
         """
+        resend.api_key = settings.RESEND_API_KEY
 
-        email = EmailMultiAlternatives(
-            subject=subject,
-            body=text_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[socio.email],
-        )
-        email.attach_alternative(html_body, "text/html")
-
-        # Attach tessera PDF
         pdf_tessera = genera_pdf_tessera(socio, quota)
-        email.attach(
-            f"tessera_{socio.codice_fiscale}_{quota.anno}.pdf",
-            pdf_tessera.read(),
-            "application/pdf",
-        )
 
-        email.send()
+        resend.Emails.send(
+            {
+                "from": settings.DEFAULT_FROM_EMAIL,
+                "to": [socio.email],
+                "subject": subject,
+                "html": html_body,
+                "attachments": [
+                    {
+                        "filename": f"tessera_{socio.cognome}_{socio.nome}.pdf",
+                        "content": base64.b64encode(pdf_tessera).decode("utf-8"),
+                    }
+                ],
+            }
+        )
+        # email = EmailMultiAlternatives(
+        #     subject=subject,
+        #     body=text_body,
+        #     from_email=settings.DEFAULT_FROM_EMAIL,
+        #     to=[socio.email],
+        # )
+        # email.attach_alternative(html_body, "text/html")
+
+        # # Attach tessera PDF
+        # pdf_tessera = genera_pdf_tessera(socio, quota)
+        # email.attach(
+        #     f"tessera_{socio.codice_fiscale}_{quota.anno}.pdf",
+        #     pdf_tessera.read(),
+        #     "application/pdf",
+        # )
+
+        # email.send()
 
     except Exception as e:
         import logging
