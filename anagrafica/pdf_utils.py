@@ -8,11 +8,13 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_RIGHT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import cm
+from reportlab.lib.units import cm, mm
+from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.platypus import (
     CondPageBreak,
     HRFlowable,
     Image,
+    PageBreak,
     Paragraph,
     SimpleDocTemplate,
     Spacer,
@@ -21,6 +23,21 @@ from reportlab.platypus import (
 )
 
 from configurazione.models import Configurazione
+
+
+class BorderCanvas(rl_canvas.Canvas):
+    def showPage(self):
+        B8 = (88 * mm, 55 * mm)
+        PAGE = B8
+        self.saveState()
+        self.setStrokeColor(colors.HexColor("#2c5364"))
+        self.setLineWidth(1.5)
+        self.rect(2 * mm, 2 * mm, PAGE[0] - 4 * mm, PAGE[1] - 4 * mm)
+        self.restoreState()
+        super().showPage()
+
+    def save(self):
+        super().save()
 
 
 def genera_pdf_iscrizione(socio, quota):
@@ -569,5 +586,215 @@ def genera_pdf_elenco_soci(soci_queryset):
     story.append(boxes_table)
 
     doc.build(story, canvasmaker=NumberedCanvas)
+    buffer.seek(0)
+    return buffer
+
+
+def genera_pdf_tessera(socio, quota):
+    config = Configurazione.get()
+    buffer = io.BytesIO()
+
+    # B8 size: 88mm x 62mm (landscape)
+    B8 = (88 * mm, 55 * mm)
+    PAGE = B8
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=PAGE,
+        rightMargin=4 * mm,
+        leftMargin=4 * mm,
+        topMargin=1 * mm,
+        bottomMargin=1 * mm,
+    )
+
+    W = PAGE[0] - 8 * mm
+
+    styles = getSampleStyleSheet()
+
+    center_title = ParagraphStyle(
+        "center_title",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=8,
+        leading=10,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#2c5364"),
+    )
+    small = ParagraphStyle(
+        "small",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=5.5,
+        leading=7,
+        textColor=colors.HexColor("#666666"),
+    )
+    label_style = ParagraphStyle(
+        "label",
+        parent=styles["Normal"],
+        fontSize=5,
+        leading=6,
+        textColor=colors.HexColor("#888888"),
+    )
+    value_style = ParagraphStyle(
+        "value",
+        parent=styles["Normal"],
+        fontSize=6.5,
+        leading=8,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#222222"),
+    )
+
+    story = []
+
+    # ── PAGE 1: Front — Logos ─────────────────────────────────────────────────
+    # Logo principale
+    logo_path = None
+    if config.logo:
+        logo_path = config.logo.path
+    else:
+        logo_path = os.path.join(
+            settings.BASE_DIR, "anagrafica", "static", "anagrafica", "logo-fucina.jpeg"
+        )
+
+    if os.path.exists(logo_path):
+        logo_left = Image(logo_path, width=18 * mm, height=18 * mm)
+    # Logo secondario
+    if config.logo_secondario:
+        try:
+            logo_right = Image(
+                config.logo_secondario.path, width=20 * mm, height=14 * mm
+            )
+        except Exception:
+            pass
+    logos_data = [[logo_left, Paragraph("", small), logo_right]]
+    logos_table = Table(logos_data, colWidths=[14 * mm, W - 30 * mm, 20 * mm])
+    logos_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (0, 0), "LEFT"),
+                ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(logos_table)
+    story.append(Spacer(1, 2 * mm))
+
+    story.append(
+        HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#2c5364"))
+    )
+    story.append(Spacer(1, 2 * mm))
+
+    story.append(Paragraph("TESSERA ASSOCIATIVA", center_title))
+    story.append(Spacer(1, 2 * mm))
+
+    story.append(
+        HRFlowable(
+            width="100%",
+            thickness=0.5,
+            color=colors.HexColor("#2c5364"),
+        )
+    )
+    story.append(Spacer(1, 2 * mm))
+    # QR code + numero tessera on the same row
+    qr_cell = Paragraph("", small)
+    if socio.qr_code and os.path.exists(socio.qr_code.path):
+        try:
+            qr_cell = Image(socio.qr_code.path, width=17 * mm, height=17 * mm)
+        except Exception:
+            pass
+
+    numero_style = ParagraphStyle(
+        "numero",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=14,
+        leading=16,
+        fontName="Helvetica-Bold",
+        textColor=colors.HexColor("#2c5364"),
+    )
+    numero_label = ParagraphStyle(
+        "numero_label",
+        parent=styles["Normal"],
+        alignment=TA_CENTER,
+        fontSize=6,
+        leading=7,
+        textColor=colors.HexColor("#888888"),
+    )
+
+    qr_row = [
+        [
+            qr_cell,
+            Paragraph("", small),
+            [
+                Paragraph("N° TESSERA", numero_label),
+                Paragraph(str(quota.pk), numero_style),
+            ],
+        ]
+    ]
+    qr_table = Table(qr_row, colWidths=[17 * mm, W - 37 * mm, 20 * mm])
+    qr_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (2, 0), (2, 0), "CENTER"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(qr_table)
+
+    # ── PAGE 2: Back — Info ───────────────────────────────────────────────────
+    story.append(PageBreak())
+    story.append(Spacer(1, 2 * mm))
+
+    anno = f"{quota.anno - 1}/{quota.anno}"
+    inizio = quota.data_inizio.strftime("%d/%m/%Y") if quota.data_inizio else "-"
+    indirizzo = f"{socio.via or ''}, {socio.comune or ''} ({socio.provincia or ''})"
+
+    rows = [
+        [
+            Paragraph("SOCIO", label_style),
+            Paragraph(f"{socio.cognome} {socio.nome}", value_style),
+        ],
+        [Paragraph("INDIRIZZO", label_style), Paragraph(indirizzo, value_style)],
+        [
+            Paragraph("CATEGORIA", label_style),
+            Paragraph(
+                socio.get_tipo_display() if socio.tipo else "Socio Ordinario",
+                value_style,
+            ),
+        ],
+        [Paragraph("N° TESSERA", label_style), Paragraph(str(quota.pk), value_style)],
+        [Paragraph("ANNO", label_style), Paragraph(str(anno), value_style)],
+        [Paragraph("DATA DI ADESIONE", label_style), Paragraph(inizio, value_style)],
+    ]
+
+    t = Table(rows, colWidths=[20 * mm, W - 20 * mm])
+    t.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f5f5f5")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#dddddd")),
+                ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#eeeeee")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING", (0, 0), (-1, -1), 3),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 3),
+            ]
+        )
+    )
+    story.append(t)
+    story.append(Spacer(1, 3 * mm))
+
+    doc.build(story, canvasmaker=BorderCanvas)
     buffer.seek(0)
     return buffer

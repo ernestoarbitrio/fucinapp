@@ -1,6 +1,6 @@
-from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.db import models
 
 from anagrafica.models import Socio
 
@@ -19,6 +19,12 @@ class Configurazione(models.Model):
     pec = models.EmailField(verbose_name="PEC", blank=True)
     logo = models.ImageField(
         verbose_name="Logo", upload_to="configurazione/", blank=True, null=True
+    )
+    logo_secondario = models.ImageField(
+        verbose_name="Logo secondario",
+        upload_to="configurazione/",
+        blank=True,
+        null=True,
     )
     firma_presidente = models.ImageField(
         verbose_name="Firma del presidente",

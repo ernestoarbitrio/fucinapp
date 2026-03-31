@@ -13,7 +13,14 @@ class ConfigurazioneAdmin(admin.ModelAdmin):
         (
             "Anagrafica",
             {
-                "fields": ("nome_associazione", "logo", "email", "pec", "cf"),
+                "fields": (
+                    "nome_associazione",
+                    "logo",
+                    "logo_secondario",
+                    "email",
+                    "pec",
+                    "cf",
+                ),
             },
         ),
         (

@@ -14,7 +14,11 @@ from import_export.formats.base_formats import XLSX
 
 from anagrafica.forms import PROVINCE_ITALIANE
 from anagrafica.models import Quota, Socio, valida_codice_fiscale
-from anagrafica.pdf_utils import genera_pdf_elenco_soci, genera_pdf_iscrizione
+from anagrafica.pdf_utils import (
+    genera_pdf_elenco_soci,
+    genera_pdf_iscrizione,
+    genera_pdf_tessera,
+)
 
 MODAL_HTML = """
 <div id="qr-modal-overlay" style="
@@ -337,17 +341,29 @@ class QuotaInline(admin.StackedInline):
         "data_inizio",
         "data_scadenza",
         "pdf_link",
+        "tessera",
     )
     ordering = ("-anno",)
-    readonly_fields = ("numero_tessera", "pdf_link")
+    readonly_fields = ("numero_tessera", "pdf_link", "tessera")
 
-    @admin.display(description="PDF")
+    @admin.display(description="Modulo registrazione")
     def pdf_link(self, obj):
         if not obj.pk:
             return "-"
         return format_html(
             '<a href="{}" target="_blank">📄 Genera PDF</a>',
             reverse("admin:anagrafica_socio_genera_pdf", args=[obj.socio_id, obj.pk]),
+        )
+
+    @admin.display(description="Tessera associativa")
+    def tessera(self, obj):
+        if not obj.pk:
+            return "-"
+        return format_html(
+            '<a href="{}" target="_blank">📄 Genera PDF</a>',
+            reverse(
+                "admin:anagrafica_socio_genera_tessera_pdf", args=[obj.socio_id, obj.pk]
+            ),
         )
 
     @admin.display(description="Numero tessera")
@@ -547,6 +563,11 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
                 name="anagrafica_socio_genera_pdf",
             ),
             path(
+                "<int:socio_id>/quota/<int:quota_id>/genera-tessera/",
+                self.admin_site.admin_view(self.genera_pdf_tessera_view),
+                name="anagrafica_socio_genera_tessera_pdf",
+            ),
+            path(
                 "registro-soci-pdf/",
                 self.admin_site.admin_view(self.registro_soci_pdf_view),
                 name="anagrafica_socio_registro_pdf",
@@ -563,6 +584,23 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
                 buffer,
                 as_attachment=False,
                 filename=f"iscrizione_{socio.codice_fiscale}_{quota.anno}.pdf",
+                content_type="application/pdf",
+            )
+        except Exception as e:
+            messages.error(request, f"Errore nella generazione del PDF: {e}")
+            return HttpResponseRedirect(
+                reverse("admin:anagrafica_socio_change", args=[socio_id])
+            )
+
+    def genera_pdf_tessera_view(self, request, socio_id, quota_id):
+        socio = get_object_or_404(Socio, pk=socio_id)
+        quota = get_object_or_404(Quota, pk=quota_id, socio=socio)
+        try:
+            buffer = genera_pdf_tessera(socio, quota)
+            return FileResponse(
+                buffer,
+                as_attachment=False,
+                filename=f"tessera_{socio.codice_fiscale}_{quota.anno}.pdf",
                 content_type="application/pdf",
             )
         except Exception as e:

@@ -5,6 +5,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from anagrafica.email_utils import invia_email_iscrizione
 from anagrafica.forms import IscrizioneForm
 from anagrafica.models import Quota, Socio
 
@@ -254,6 +255,10 @@ def iscrizione_riepilogo(request):
             socio.save()
             socio.genera_qr_code()
             socio.save(update_fields=["qr_code"])
+            # Get the auto-created quota
+            quota = socio.quote.order_by("-anno").first()
+            # Send confirmation email
+            invia_email_iscrizione(socio, quota)
             del request.session["iscrizione_data"]
             return redirect("anagrafica:iscrizione_completata")
 
