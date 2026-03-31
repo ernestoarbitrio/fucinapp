@@ -12,6 +12,7 @@ from import_export import fields, resources
 from import_export.admin import ExportMixin
 from import_export.formats.base_formats import XLSX
 
+from anagrafica.email_utils import invia_tessera
 from anagrafica.forms import PROVINCE_ITALIANE
 from anagrafica.models import Quota, Socio, valida_codice_fiscale
 from anagrafica.pdf_utils import (
@@ -360,9 +361,14 @@ class QuotaInline(admin.StackedInline):
         if not obj.pk:
             return "-"
         return format_html(
-            '<a href="{}" target="_blank">📄 Genera PDF</a>',
+            '<a href="{}" target="_blank" style="margin-right:8px;">📄 Genera PDF</a>'
+            '<a href="{}" style="color:#e65100;">📧 Invia email</a>',
             reverse(
                 "admin:anagrafica_socio_genera_tessera_pdf", args=[obj.socio_id, obj.pk]
+            ),
+            reverse(
+                "admin:anagrafica_socio_invia_tessera_email",
+                args=[obj.socio_id, obj.pk],
             ),
         )
 
@@ -523,7 +529,7 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
             f'<img src="{obj.firma}" style="max-width:300px; border:1px solid #ddd; border-radius:8px;">'
         )
 
-    @admin.action(description="♻️ Rinnova quota per i soci selezionati")
+    @admin.action(description="Rinnova quota per i soci selezionati")
     def bulk_renew(self, request, queryset):
         ids = queryset.values_list("pk", flat=True)
         ids_str = "&".join(f"ids={pk}" for pk in ids)
@@ -539,7 +545,7 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
             '<span style="color:orange; font-weight:bold;">⏳ In attesa</span>'
         )
 
-    @admin.action(description="✅ Approva soci selezionati")
+    @admin.action(description="Approva soci selezionati")
     def approva_soci(self, request, queryset):
         updated = 0
         for socio in queryset.filter(approvato=False):
@@ -549,7 +555,7 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
             updated += 1
         self.message_user(request, f"✅ {updated} soci approvati.")
 
-    @admin.action(description="❌ Rifiuta soci selezionati")
+    @admin.action(description="Rifiuta soci selezionati")
     def rifiuta_soci(self, request, queryset):
         updated = queryset.update(approvato=False)
         self.message_user(request, f"❌ {updated} soci rifiutati.")
@@ -571,6 +577,11 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
                 "registro-soci-pdf/",
                 self.admin_site.admin_view(self.registro_soci_pdf_view),
                 name="anagrafica_socio_registro_pdf",
+            ),
+            path(
+                "<int:socio_id>/quota/<int:quota_id>/invia-tessera-email/",
+                self.admin_site.admin_view(self.invia_tessera_email_view),
+                name="anagrafica_socio_invia_tessera_email",
             ),
         ]
         return custom + urls
@@ -608,6 +619,18 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
             return HttpResponseRedirect(
                 reverse("admin:anagrafica_socio_change", args=[socio_id])
             )
+
+    def invia_tessera_email_view(self, request, socio_id, quota_id):
+        socio = get_object_or_404(Socio, pk=socio_id)
+        quota = get_object_or_404(Quota, pk=quota_id, socio=socio)
+        try:
+            invia_tessera(socio, quota)
+            messages.success(request, f"✅ Tessera inviata via email a {socio.email}.")
+        except Exception as e:
+            messages.error(request, f"Errore invio email: {e}")
+        return HttpResponseRedirect(
+            reverse("admin:anagrafica_socio_change", args=[socio_id])
+        )
 
     @admin.action(description="📋 Esporta registro soci PDF")
     def export_registro_soci_pdf(self, request, queryset):
