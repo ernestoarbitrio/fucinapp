@@ -141,5 +141,5 @@ EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 RESEND_API_KEY = EMAIL_HOST_PASSWORD
 DEFAULT_FROM_EMAIL = os.environ.get(
-    "DEFAULT_FROM_EMAIL", "Fucina Salentina APS <onboarding@resend.dev>"
+    "DEFAULT_FROM_EMAIL", "Fucina Salentina APS <no-reply@fucinasalentina.it>"
 )
