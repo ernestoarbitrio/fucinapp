@@ -12,15 +12,12 @@ from django.utils import timezone
 
 TIPO_CHOICES = [
     ("SS", "Socio Sostenitore"),
+    ("SV", "Socio Volontario"),
     ("VP", "Vice Presidente"),
+    ("PS", "Presidente"),
     ("CO", "Consigliere"),
     ("SG", "Segretario"),
-    ("DS", "Direttore Sportivo"),
-    ("GA", "Giudice Arbitro"),
-    ("MS", "Medico Sportivo"),
-    ("SO", "Socio Ordinario"),
-    ("SJ", "Socio Junior"),
-    ("AT", "Atleta"),
+    ("TE", "Tesoriere"),
 ]
 
 
@@ -238,4 +235,6 @@ class Quota(models.Model):
 
     @property
     def is_scaduta(self):
+        if not self.data_scadenza:
+            return False
         return self.data_scadenza < timezone.now().date()
