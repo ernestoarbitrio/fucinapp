@@ -5,7 +5,7 @@ from django.contrib import admin, messages
 from django.contrib.admin import SimpleListFilter
 from django.forms import HiddenInput
 from django.http import FileResponse, HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -425,7 +425,7 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at", "qr_code_preview", "firma_preview")
     ordering = ("cognome", "nome")
     inlines = [QuotaInline]
-    actions = ["approva_soci", "rifiuta_soci"]
+    actions = ["approva_soci", "rifiuta_soci", "bulk_renew"]
     resource_classes = [SocioResource]
     formats = [XLSX]
 
@@ -567,6 +567,12 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
         return mark_safe(
             '<span style="color:orange; font-weight:bold;">⏳ In attesa</span>'
         )
+
+    @admin.action(description="Rinnova quota per i soci selezionati")
+    def bulk_renew(self, request, queryset):
+        ids = queryset.values_list("pk", flat=True)
+        ids_str = "&".join(f"ids={pk}" for pk in ids)
+        return redirect(f"/anagrafica/bulk-renew/?{ids_str}")
 
     @admin.action(description="Approva soci selezionati")
     def approva_soci(self, request, queryset):

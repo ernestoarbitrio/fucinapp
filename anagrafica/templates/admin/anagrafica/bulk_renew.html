@@ -1,173 +1,147 @@
 {% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans "Home" %}</a> ›
+    <a href="{% url 'admin:anagrafica_socio_changelist' %}">Soci</a> ›
+    Rinnovo quote
+</div>
+{% endblock %}
+
+{% block content_title %}
+<h1>🔄 Rinnovo quote {{ anno_corrente }}</h1>
+{% endblock %}
+
 {% block content %}
 <style>
-    .renew-form {
-        background: var(--body-bg);
-        border-radius: 12px;
-        padding: 32px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    .renew-section { margin-bottom: 24px; }
+    .renew-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
         border: 1px solid var(--border-color);
-    }
-
-    .renew-form h1 {
-        margin-top: 0;
-        font-size: 1.4rem;
-        color: var(--body-fg);
-    }
-
-    .field-row {
+        border-radius: 10px;
+        overflow: hidden;
         margin-bottom: 16px;
     }
-
-    .field-row label {
-        display: block;
-        font-weight: 600;
-        margin-bottom: 4px;
-        color: var(--body-fg);
-    }
-
-    .field-row input,
-    .field-row select {
-        width: 100%;
-        padding: 8px 12px;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 1rem;
-        background: var(--darkened-bg);
-        color: var(--body-fg);
-    }
-
-    .field-row input,
-    .field-row select {
-        width: 100%;
-        padding: 8px 12px;
-        height: 42px;
-        line-height: 1.5;
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 1rem;
-        background: var(--darkened-bg);
-        color: var(--body-fg);
-    }
-
-    .soci-list {
-        background: var(--darkened-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 24px;
-        max-height: 200px;
-        overflow-y: auto;
-    }
-
-    .soci-list div {
-        padding: 4px 0;
-        border-bottom: 1px solid var(--border-color);
-        font-size: 0.9rem;
-        color: var(--body-fg);
-    }
-
-    .soci-list div:last-child {
-        border: none;
-    }
-
-    .btn-confirm {
-        background: var(--primary);
-        color: var(--primary-fg);
-        border: none;
-        padding: 10px 24px;
-        border-radius: 6px;
-        font-size: 1rem;
-        cursor: pointer;
-    }
-
-    .btn-confirm:hover {
-        filter: brightness(1.1);
-    }
-
-    .btn-cancel {
-        background: var(--darkened-bg);
-        color: var(--body-fg);
-        border: 1px solid var(--border-color);
-        padding: 10px 24px;
-        border-radius: 6px;
-        font-size: 1rem;
-        cursor: pointer;
-        margin-left: 8px;
-        text-decoration: none;
-        display: inline-block;
-    }
-
-    .btn-cancel:hover {
-        filter: brightness(0.95);
-    }
-
-    .warning {
-        background: var(--darkened-bg);
-        border-left: 4px solid var(--warning-fg, #f0a500);
+    .renew-table thead { background: var(--darkened-bg); }
+    .renew-table th {
         padding: 10px 14px;
-        border-radius: 4px;
-        margin-bottom: 20px;
+        text-align: left;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        color: var(--body-quiet-color);
+        border-bottom: 1px solid var(--border-color);
+    }
+    .renew-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.88rem;
+        color: var(--body-fg);
+    }
+    .renew-table tr:last-child td { border-bottom: none; }
+    .badge-green { background:#e6f4ea; color:#2e7d32; padding:2px 8px; border-radius:20px; font-size:0.75rem; font-weight:600; }
+    .badge-orange { background:#fff3cd; color:#856404; padding:2px 8px; border-radius:20px; font-size:0.75rem; font-weight:600; }
+    .info-box {
+        background: var(--darkened-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
         font-size: 0.9rem;
-        color: var(--body-fg);
     }
-
-    p {
-        color: var(--body-fg);
-    }
+    .info-box p { margin: 4px 0; color: var(--body-fg); }
+    .info-box strong { color: var(--body-fg); }
+    .form-row-inline { display: flex; gap: 16px; align-items: flex-end; margin-bottom: 20px; flex-wrap: wrap; }
+    .form-field label { display: block; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; color: var(--body-fg); }
 </style>
 
-<div class="renew-form">
-    <h1>♻️ Rinnovo quota massivo</h1>
+{% if non_eligibili %}
+<div style="background:#fff3cd; border:1px solid #f0a500; border-radius:8px; padding:12px 16px; margin-bottom:20px;">
+    <strong>⚠️ {{ non_eligibili|length }} soci già rinnovati per {{ anno_corrente }}:</strong>
+    {% for s in non_eligibili %}
+        <span style="font-size:0.85rem;">{{ s }}{% if not forloop.last %}, {% endif %}</span>
+    {% endfor %}
+</div>
+{% endif %}
 
-    <p>Stai per creare una quota per <strong>{{ soci|length }} soci</strong>:</p>
+{% if eligibili %}
+<div class="info-box">
+    <p><strong>Anno quota:</strong> {{ anno_corrente }}</p>
+    <p><strong>Data inizio validità:</strong> {{ data_inizio|date:"d/m/Y" }}</p>
+    <p><strong>Data scadenza:</strong> {{ data_scadenza|date:"d/m/Y" }}</p>
+    <p><strong>Soci da rinnovare:</strong> {{ eligibili|length }}</p>
+</div>
 
-    <div class="soci-list">
-        {% for socio in soci %}
-        <div>{{ socio.cognome }} {{ socio.nome }} — {{ socio.codice_fiscale }}</div>
-        {% endfor %}
-    </div>
+<form method="post">
+    {% csrf_token %}
+    {% for s in eligibili %}
+        <input type="hidden" name="selected_ids" value="{{ s.pk }}">
+    {% endfor %}
 
-    {% if già_presenti %}
-    <div class="warning">
-        ⚠️ <strong>{{ già_presenti }} soci</strong> hanno già una quota per {{ anno }} e verranno saltati.
-    </div>
-    {% endif %}
-
-    <form method="post">
-        {% csrf_token %}
-        {% for id in selected_ids %}
-        <input type="hidden" name="selected_ids" value="{{ id }}" />
-        {% endfor %}
-
-        <div class="field-row">
-            <label>Anno</label>
-            <input type="number" name="anno" value="{{ anno }}" required />
+    <div class="form-row-inline">
+        <div class="form-field">
+            <label>Importo quota (€)</label>
+            <input type="number" name="importo" value="5" min="0" step="0.50" style="width:120px;">
         </div>
-        <div class="field-row">
-            <label>Importo (€)</label>
-            <input type="number" name="importo" value="{{ importo_default }}" step="0.01" min="0" required />
-        </div>
-        <div class="field-row">
-            <label>Data inizio validità</label>
-            <input type="date" name="data_inizio" value="{{ data_inizio }}" required />
-        </div>
-        <div class="field-row">
-            <label>Data scadenza</label>
-            <input type="date" name="data_scadenza" value="{{ data_scadenza }}" required />
-        </div>
-        <div class="field-row">
+        <div class="form-field">
             <label>Stato</label>
-            <select name="stato">
-                <option value="pagata">Pagata</option>
+            <select name="stato" class="select">
                 <option value="in_attesa">In attesa di pagamento</option>
+                <option value="pagata">Pagata</option>
             </select>
         </div>
+    </div>
 
-        <div style="margin-top:24px;">
-            <button type="submit" class="btn-confirm">✅ Conferma rinnovo</button>
-            <a href="{% url 'admin:anagrafica_socio_changelist' %}" class="btn-cancel">Annulla</a>
-        </div>
-    </form>
+    <div class="renew-section">
+        <table class="renew-table">
+            <thead>
+                <tr>
+                    <th>Socio</th>
+                    <th>Email</th>
+                    <th>Ultima quota</th>
+                    <th>Stato rinnovo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in eligibili %}
+                <tr>
+                    <td><a href="{% url 'admin:anagrafica_socio_change' s.pk %}">{{ s }}</a></td>
+                    <td>{{ s.email }}</td>
+                    <td>{{ s.ultima_quota.anno|default:"-" }}</td>
+                    <td><span class="badge-green">✅ Verrà rinnovato</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div style="display:flex; gap:12px;">
+        <a href="{% url 'admin:anagrafica_socio_changelist' %}"
+           style="padding:10px 20px; background:var(--darkened-bg); color:var(--body-fg);
+                  border-radius:8px; text-decoration:none; font-weight:600;">
+            ← Annulla
+        </a>
+        <button type="submit"
+                style="padding:10px 24px; background:#417690; color:white;
+                       border:none; border-radius:8px; font-size:0.95rem;
+                       font-weight:600; cursor:pointer;">
+            🔄 Conferma rinnovo {{ eligibili|length }} soci
+        </button>
+    </div>
+</form>
+
+{% else %}
+<div style="text-align:center; padding:40px; color:var(--body-quiet-color);">
+    <p style="font-size:1.1rem;">✅ Tutti i soci selezionati hanno già una quota per il {{ anno_corrente }}.</p>
+    <a href="{% url 'admin:anagrafica_socio_changelist' %}"
+       style="display:inline-block; margin-top:16px; padding:10px 20px;
+              background:var(--darkened-bg); color:var(--body-fg);
+              border-radius:8px; text-decoration:none; font-weight:600;">
+        ← Torna ai soci
+    </a>
 </div>
+{% endif %}
+
 {% endblock %}

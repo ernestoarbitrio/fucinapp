@@ -1,5 +1,6 @@
 import datetime
 
+from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -21,6 +22,61 @@ def verifica_socio(request, token):
             "in_regola": socio.is_in_regola,
         },
     )
+
+
+@staff_member_required
+def bulk_renew(request):
+    from django.contrib.admin import site as admin_site
+
+    from anagrafica.models import get_data_scadenza_default
+
+    today = timezone.now().date()
+    anno_corrente = today.year
+
+    # Only soci WITHOUT a quota for the current year are eligible
+    soci_ids = request.GET.getlist("ids") or request.POST.getlist("selected_ids")
+    soci = Socio.objects.filter(pk__in=soci_ids).prefetch_related("quote")
+
+    eligibili = [s for s in soci if not s.quote.filter(anno=anno_corrente).exists()]
+    non_eligibili = [s for s in soci if s.quote.filter(anno=anno_corrente).exists()]
+
+    data_scadenza = get_data_scadenza_default(anno_corrente)
+
+    if request.method == "POST":
+        importo = request.POST.get("importo", 5)
+        stato = request.POST.get("stato", "in_attesa")
+        creati = 0
+
+        for socio in eligibili:
+            Quota.objects.create(
+                socio=socio,
+                anno=anno_corrente,
+                importo=importo,
+                stato=stato,
+                data_inizio=today,
+                data_scadenza=data_scadenza,
+            )
+            creati += 1
+
+        messages.success(request, f"✅ Rinnovo completato per {creati} soci.")
+        if non_eligibili:
+            nomi = ", ".join(str(s) for s in non_eligibili)
+            messages.warning(request, f"⚠️ Già rinnovati per {anno_corrente}: {nomi}")
+
+        return redirect("/admin/anagrafica/socio/")
+
+    admin_context = admin_site.each_context(request)
+    context = {
+        **admin_context,
+        "title": f"Rinnovo quote {anno_corrente}",
+        "eligibili": eligibili,
+        "non_eligibili": non_eligibili,
+        "anno_corrente": anno_corrente,
+        "data_scadenza": data_scadenza,
+        "data_inizio": today,
+        "opts": Socio._meta,
+    }
+    return render(request, "admin/anagrafica/bulk_renew.html", context)
 
 
 @staff_member_required
