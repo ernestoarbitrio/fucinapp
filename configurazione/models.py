@@ -50,12 +50,12 @@ class Configurazione(models.Model):
     )
     scadenza_quota_giorno = models.PositiveSmallIntegerField(
         verbose_name="Giorno scadenza quota",
-        default=3,
+        default=12,
         help_text="Giorno di scadenza della quota associativa.",
     )
     scadenza_quota_mese = models.PositiveSmallIntegerField(
         verbose_name="Mese scadenza quota",
-        default=12,
+        default=3,
         help_text="Mese di scadenza della quota associativa.",
     )
 
