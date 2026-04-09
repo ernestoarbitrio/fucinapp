@@ -16,10 +16,17 @@
         if (tools) {
             const li = document.createElement("li");
             li.innerHTML = `<a href="/admin/anagrafica/socio/registro-soci-pdf/"
-                class=export_link">
+                class=export_link>
                 📋 Registro soci PDF
             </a>`;
             tools.prepend(li);
+
+            const li2 = document.createElement("li");
+            li2.innerHTML = `<a href="/admin/anagrafica/socio/moduli-iscrizione-pdf/"
+                class=export_link>
+                📄 Moduli iscrizione PDF
+            </a>`;
+            tools.prepend(li2);
         }
     }
 

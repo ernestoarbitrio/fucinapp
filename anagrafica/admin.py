@@ -1,9 +1,11 @@
+import io
+
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin import SimpleListFilter
 from django.forms import HiddenInput
-from django.http import FileResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect
+from django.http import FileResponse, HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -11,10 +13,16 @@ from django.utils.safestring import mark_safe
 from import_export import fields, resources
 from import_export.admin import ExportMixin
 from import_export.formats.base_formats import XLSX
+from pypdf import PdfReader, PdfWriter
 
 from anagrafica.email_utils import invia_tessera
 from anagrafica.forms import PROVINCE_ITALIANE
-from anagrafica.models import Quota, Socio, valida_codice_fiscale
+from anagrafica.models import (
+    Quota,
+    Socio,
+    get_data_scadenza_default,
+    valida_codice_fiscale,
+)
 from anagrafica.pdf_utils import (
     genera_pdf_elenco_soci,
     genera_pdf_iscrizione,
@@ -376,6 +384,27 @@ class QuotaInline(admin.StackedInline):
     def numero_tessera(self, obj):
         return obj.pk if obj.pk else "-"
 
+    def clean(self):
+        super().clean()
+        anno = self.cleaned_data.get("anno")
+        socio = self.cleaned_data.get("socio")
+        instance = self.instance
+        if anno and socio:
+            qs = Quota.objects.filter(socio=socio, anno=anno)
+            if instance.pk:
+                qs = qs.exclude(pk=instance.pk)
+            if qs.exists():
+                raise forms.ValidationError(f"Esiste già una quota per l'anno {anno}.")
+
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        today = timezone.now().date()
+        formset.form.base_fields["data_inizio"].initial = today
+        formset.form.base_fields["data_scadenza"].initial = get_data_scadenza_default(
+            today.year
+        )
+        return formset
+
 
 @admin.register(Socio)
 class SocioAdmin(ExportMixin, admin.ModelAdmin):
@@ -396,7 +425,7 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at", "qr_code_preview", "firma_preview")
     ordering = ("cognome", "nome")
     inlines = [QuotaInline]
-    actions = ["bulk_renew", "approva_soci", "rifiuta_soci"]
+    actions = ["approva_soci", "rifiuta_soci"]
     resource_classes = [SocioResource]
     formats = [XLSX]
 
@@ -529,12 +558,6 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
             f'<img src="{obj.firma}" style="max-width:300px; border:1px solid #ddd; border-radius:8px;">'
         )
 
-    @admin.action(description="Rinnova quota per i soci selezionati")
-    def bulk_renew(self, request, queryset):
-        ids = queryset.values_list("pk", flat=True)
-        ids_str = "&".join(f"ids={pk}" for pk in ids)
-        return redirect(f"/anagrafica/bulk-renew/?{ids_str}")
-
     @admin.display(description="Stato", boolean=False)
     def approvato_badge(self, obj):
         if obj.approvato:
@@ -582,6 +605,11 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
                 "<int:socio_id>/quota/<int:quota_id>/invia-tessera-email/",
                 self.admin_site.admin_view(self.invia_tessera_email_view),
                 name="anagrafica_socio_invia_tessera_email",
+            ),
+            path(
+                "moduli-iscrizione-pdf/",
+                self.admin_site.admin_view(self.moduli_iscrizione_pdf_view),
+                name="anagrafica_socio_moduli_iscrizione_pdf",
             ),
         ]
         return custom + urls
@@ -654,25 +682,94 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
         )
 
     def registro_soci_pdf_view(self, request):
-        today = timezone.now().date()
-        anno_corrente = today.year
-        soci = (
-            Socio.objects.filter(
-                approvato=True,
-                quote__stato="pagata",
-                quote__anno=anno_corrente,
+        anno_corrente = timezone.now().year
+        anni = Quota.objects.values_list("anno", flat=True).distinct().order_by("-anno")
+
+        if request.method == "POST":
+            anno = int(request.POST.get("anno", anno_corrente))
+
+            soci = (
+                Socio.objects.filter(
+                    approvato=True,
+                    quote__stato="pagata",
+                    quote__anno=anno,
+                )
+                .prefetch_related("quote")
+                .distinct()
+                .order_by("cognome", "nome")
             )
-            .prefetch_related("quote")
-            .distinct()
-            .order_by("cognome", "nome")
-        )
-        buffer = genera_pdf_elenco_soci(soci)
-        return FileResponse(
-            buffer,
-            as_attachment=True,
-            filename=f"registro_soci_{today.strftime('%Y%m%d')}.pdf",
-            content_type="application/pdf",
-        )
+
+            buffer = genera_pdf_elenco_soci(soci, anno=anno)
+            return FileResponse(
+                buffer,
+                as_attachment=True,
+                filename=f"registro_soci_{anno}.pdf",
+                content_type="application/pdf",
+            )
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Genera registro soci",
+            "anni": anni,
+            "anno_corrente": anno_corrente,
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/anagrafica/registro_soci_select.html", context)
+
+    def moduli_iscrizione_pdf_view(self, request):
+        anno_corrente = timezone.now().year
+        anni = Quota.objects.values_list("anno", flat=True).distinct().order_by("-anno")
+
+        if request.method == "POST":
+            anno = int(request.POST.get("anno", anno_corrente))
+
+            soci = (
+                Socio.objects.filter(
+                    approvato=True,
+                    quote__anno=anno,
+                )
+                .prefetch_related("quote")
+                .distinct()
+                .order_by("cognome", "nome")
+            )
+
+            writer = PdfWriter()
+            errors = []
+
+            for socio in soci:
+                quota = socio.quote.filter(anno=anno).first()
+                if not quota:
+                    continue
+                try:
+                    buffer = genera_pdf_iscrizione(socio, quota)
+                    reader = PdfReader(buffer)
+                    for page in reader.pages:
+                        writer.add_page(page)
+                except Exception as e:
+                    errors.append(f"{socio}: {e}")
+
+            if errors:
+                for err in errors:
+                    messages.warning(request, err)
+
+            output = io.BytesIO()
+            writer.write(output)
+            output.seek(0)
+
+            response = HttpResponse(output, content_type="application/pdf")
+            response["Content-Disposition"] = (
+                f'attachment; filename="moduli_iscrizione_{anno}.pdf"'
+            )
+            return response
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Genera moduli iscrizione",
+            "anni": anni,
+            "anno_corrente": anno_corrente,
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/anagrafica/moduli_iscrizione.html", context)
 
 
 @admin.register(Quota)

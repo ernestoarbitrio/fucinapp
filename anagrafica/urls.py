@@ -1,11 +1,11 @@
 from django.urls import path
+
 from anagrafica import views
 
 app_name = "anagrafica"
 
 urlpatterns = [
     path("verifica/<uuid:token>/", views.verifica_socio, name="verifica_socio"),
-    path("bulk-renew/", views.bulk_renew, name="bulk_renew"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("budget/", views.budget, name="budget"),
     path("iscrizione/", views.iscrizione, name="iscrizione"),

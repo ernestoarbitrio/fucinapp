@@ -1,6 +1,5 @@
 import datetime
 
-from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,71 +19,6 @@ def verifica_socio(request, token):
             "quota": socio.quota_attiva,
             "ultima_quota": socio.ultima_quota,
             "in_regola": socio.is_in_regola,
-        },
-    )
-
-
-@staff_member_required
-def bulk_renew(request):
-    today = timezone.now().date()
-    anno = today.year
-
-    if request.method == "POST":
-        selected_ids = request.POST.getlist("selected_ids")
-        anno = int(request.POST.get("anno", anno))
-        importo = request.POST.get("importo", 0)
-        data_inizio = request.POST.get("data_inizio")
-        data_scadenza = request.POST.get("data_scadenza")
-        stato = request.POST.get("stato", "in_attesa")
-
-        soci = Socio.objects.filter(pk__in=selected_ids)
-        created = 0
-        skipped = 0
-
-        for socio in soci:
-            _, was_created = Quota.objects.get_or_create(
-                socio=socio,
-                anno=anno,
-                defaults={
-                    "importo": importo,
-                    "stato": stato,
-                    "data_inizio": data_inizio,
-                    "data_scadenza": data_scadenza,
-                    "data_pagamento": today if stato == "pagata" else None,
-                },
-            )
-            if was_created:
-                created += 1
-            else:
-                skipped += 1
-
-        messages.success(
-            request,
-            f"✅ {created} quote create per {anno}."
-            + (f" {skipped} soci saltati (quota già presente)." if skipped else ""),
-        )
-        return redirect("/admin/anagrafica/socio/")
-
-    # GET — show confirmation page
-    selected_ids = request.GET.getlist("ids")
-    soci = Socio.objects.filter(pk__in=selected_ids)
-
-    già_presenti = Quota.objects.filter(
-        socio__in=soci,
-        anno=anno,
-    ).count()
-
-    return render(
-        request,
-        "admin/anagrafica/bulk_renew.html",
-        {
-            "soci": soci,
-            "selected_ids": selected_ids,
-            "anno": anno,
-            "importo_default": "30.00",
-            "data_inizio": today.strftime("%Y-%m-%d"),
-            "data_scadenza": today.replace(year=anno + 1).strftime("%Y-%m-%d"),
-            "già_presenti": già_presenti,
         },
     )
 

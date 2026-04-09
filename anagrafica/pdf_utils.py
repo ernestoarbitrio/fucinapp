@@ -309,10 +309,13 @@ def genera_pdf_iscrizione(socio, quota):
     return buffer
 
 
-def genera_pdf_elenco_soci(soci_queryset):
+def genera_pdf_elenco_soci(soci_queryset, anno):
+    from django.utils import timezone
     from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.platypus import LongTable
 
+    if anno is None:
+        anno = timezone.now().year
     config = Configurazione.get()
 
     buffer = io.BytesIO()
@@ -414,9 +417,7 @@ def genera_pdf_elenco_soci(soci_queryset):
                 Paragraph(
                     f"ASSOCIAZIONE: {config.nome_associazione.upper()}", title_style
                 ),
-                Paragraph(
-                    f"TESSERAMENTO {today.year}/{str(today.year + 1)[-2:]}", sub_style
-                ),
+                Paragraph(f"TESSERAMENTO {anno}/{str(anno + 1)[-2:]}", sub_style),
                 Paragraph(f"LOCALITA': {config.comune.upper()}", sub_style),
             ],
             Paragraph("", tiny),
@@ -462,10 +463,8 @@ def genera_pdf_elenco_soci(soci_queryset):
 
     rows = [col_headers]
 
-    for i, socio in enumerate(soci_queryset, start=1):
-        quota_corrente = socio.quote.filter(
-            stato="pagata", anno=date.today().year
-        ).first()
+    for socio in soci_queryset:
+        quota_corrente = socio.quote.filter(stato="pagata", anno=anno).first()
         numero_tessera = str(quota_corrente.pk)
         data_tess = (
             quota_corrente.data_pagamento.strftime("%d/%m/%y")
@@ -755,7 +754,7 @@ def genera_pdf_tessera(socio, quota):
     story.append(PageBreak())
     story.append(Spacer(1, 2 * mm))
 
-    anno = f"{quota.anno - 1}/{quota.anno}"
+    anno = f"{quota.anno}/{quota.anno + 1}"
     inizio = quota.data_inizio.strftime("%d/%m/%Y") if quota.data_inizio else "-"
     indirizzo = f"{socio.via or ''}, {socio.comune or ''} ({socio.provincia or ''})"
 

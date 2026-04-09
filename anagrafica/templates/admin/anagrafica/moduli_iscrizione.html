@@ -1,0 +1,49 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans "Home" %}</a> ›
+    <a href="{% url 'admin:anagrafica_socio_changelist' %}">Soci</a> ›
+    Genera moduli iscrizione
+</div>
+{% endblock %}
+
+{% block content_title %}
+<h1>📄 Genera moduli iscrizione</h1>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 480px;">
+    <p style="color: var(--body-quiet-color); margin-bottom: 24px;">
+        Seleziona l'anno per generare un PDF con tutti i moduli di iscrizione dei soci con quota per quell'anno.
+    </p>
+
+    <form method="post">
+        {% csrf_token %}
+        <div style="margin-bottom: 20px;">
+            <label style="display:block; font-weight:600; margin-bottom:8px;">Anno quota</label>
+            <select name="anno" class="select">
+                {% for anno in anni %}
+                <option value="{{ anno }}" {% if anno == anno_corrente %}selected{% endif %}>
+                    {{ anno }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="button default" style="
+            background: #417690;
+            color: white;
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+        ">
+            📥 Scarica PDF
+        </button>
+    </form>
+</div>
+{% endblock %}

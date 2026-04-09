@@ -1,6 +1,7 @@
 import io
 import re
 import uuid
+from datetime import date
 
 import qrcode
 from django.core.exceptions import ValidationError
@@ -19,6 +20,16 @@ TIPO_CHOICES = [
     ("SG", "Segretario"),
     ("TE", "Tesoriere"),
 ]
+
+
+def get_data_scadenza_default(anno):
+    from configurazione.models import Configurazione
+
+    config = Configurazione.get()
+    try:
+        return date(anno + 1, config.scadenza_quota_mese, config.scadenza_quota_giorno)
+    except ValueError:
+        return date(anno + 1, 3, 31)
 
 
 def valida_codice_fiscale(value):
@@ -162,9 +173,10 @@ class Socio(models.Model):
         self.qr_code.save(filename, ContentFile(buffer.read()), save=False)
 
     def save(self, *args, **kwargs):
-        # QR generation is intentionally NOT done here.
-        # Call obj.genera_qr_code(request) explicitly after saving,
-        # or let SocioAdmin.save_model() handle it with the request context.
+        if self.nome:
+            self.nome = self.nome.strip().title()
+        if self.cognome:
+            self.cognome = self.cognome.strip().title()
         super().save(*args, **kwargs)
 
 
@@ -172,11 +184,16 @@ class Socio(models.Model):
 def crea_quota_iniziale(sender, instance, created, **kwargs):
     if not created:
         return
+    today = timezone.now().date()
+    anno = today.year
+    data_scadenza = get_data_scadenza_default(anno)
     quota = Quota.objects.create(
         socio=instance,
-        anno=timezone.now().year,
+        anno=anno,
         importo=5,
         stato="in_attesa",
+        data_inizio=today,
+        data_scadenza=data_scadenza,
     )
     # Generate PDF
     try:
@@ -238,3 +255,10 @@ class Quota(models.Model):
         if not self.data_scadenza:
             return False
         return self.data_scadenza < timezone.now().date()
+
+    def clean(self):
+        if self.pk is None:  # only on creation
+            if Quota.objects.filter(socio=self.socio, anno=self.anno).exists():
+                raise ValidationError(
+                    f"Esiste già una quota per {self.socio} per l'anno {self.anno}."
+                )

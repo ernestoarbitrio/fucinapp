@@ -44,7 +44,12 @@ class ConfigurazioneAdmin(admin.ModelAdmin):
         (
             "Impostazioni",
             {
-                "fields": ("delta_giorni_iscrizione", "delta_giorni_registro"),
+                "fields": (
+                    "delta_giorni_iscrizione",
+                    "delta_giorni_registro",
+                    "scadenza_quota_giorno",
+                    "scadenza_quota_mese",
+                ),
             },
         ),
     )
