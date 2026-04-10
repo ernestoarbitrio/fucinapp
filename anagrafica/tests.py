@@ -658,3 +658,151 @@ class IscrizioneViewTests(TestCase):
     def test_completata_returns_200(self):
         response = self.client.get("/anagrafica/iscrizione/completata/")
         self.assertEqual(response.status_code, 200)
+
+
+class BulkRenewViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        self.client.login(username="admin", password="password")
+        self.today = timezone.now().date()
+        self.anno_corrente = self.today.year
+
+        self.s1 = make_socio()
+        self.s2 = make_socio(
+            nome="Luigi",
+            cognome="Bianchi",
+            codice_fiscale="BNCLGU85B01H501Z",
+            email="luigi@example.com",
+        )
+        self.s3 = make_socio(
+            nome="Anna",
+            cognome="Verdi",
+            codice_fiscale="VRDNNA90A41H501X",
+            email="anna@example.com",
+        )
+        # Delete auto-created quotas
+        Quota.objects.all().delete()
+
+    def _get(self, ids):
+        qs = "&".join(f"ids={pk}" for pk in ids)
+        return self.client.get(f"/anagrafica/bulk-renew/?{qs}")
+
+    def _post(self, ids, **kwargs):
+        data = {
+            "selected_ids": ids,
+            "importo": "10.00",
+            "stato": "in_attesa",
+        }
+        data.update(kwargs)
+        return self.client.post("/anagrafica/bulk-renew/", data)
+
+    def test_get_shows_confirmation_page(self):
+        response = self._get([self.s1.pk, self.s2.pk])
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "admin/anagrafica/bulk_renew.html")
+
+    def test_get_shows_all_soci_as_eligibili_when_no_quotas(self):
+        response = self._get([self.s1.pk, self.s2.pk])
+        self.assertIn(self.s1, response.context["eligibili"])
+        self.assertIn(self.s2, response.context["eligibili"])
+        self.assertEqual(len(response.context["non_eligibili"]), 0)
+
+    def test_socio_with_current_year_quota_is_not_eligibile(self):
+        make_quota(self.s1, anno=self.anno_corrente)
+        response = self._get([self.s1.pk, self.s2.pk])
+        self.assertIn(self.s1, response.context["non_eligibili"])
+        self.assertIn(self.s2, response.context["eligibili"])
+
+    def test_socio_with_previous_year_quota_is_eligibile(self):
+        make_quota(
+            self.s1,
+            anno=self.anno_corrente - 1,
+            data_inizio=datetime.date(self.anno_corrente - 1, 1, 1),
+            data_scadenza=datetime.date(self.anno_corrente - 1, 12, 31),
+        )
+        response = self._get([self.s1.pk])
+        self.assertIn(self.s1, response.context["eligibili"])
+
+    def test_post_creates_quota_for_eligibili(self):
+        self._post([self.s1.pk, self.s2.pk])
+        self.assertEqual(Quota.objects.filter(anno=self.anno_corrente).count(), 2)
+
+    def test_post_sets_correct_anno(self):
+        self._post([self.s1.pk])
+        quota = Quota.objects.get(socio=self.s1, anno=self.anno_corrente)
+        self.assertEqual(quota.anno, self.anno_corrente)
+
+    def test_post_sets_data_inizio_to_today(self):
+        self._post([self.s1.pk])
+        quota = Quota.objects.get(socio=self.s1, anno=self.anno_corrente)
+        self.assertEqual(quota.data_inizio, self.today)
+
+    def test_post_sets_data_scadenza_from_config(self):
+        from anagrafica.models import get_data_scadenza_default
+
+        self._post([self.s1.pk])
+        quota = Quota.objects.get(socio=self.s1, anno=self.anno_corrente)
+        expected = get_data_scadenza_default(self.anno_corrente)
+        self.assertEqual(quota.data_scadenza, expected)
+
+    def test_post_sets_importo(self):
+        self._post([self.s1.pk], importo="15.00")
+        quota = Quota.objects.get(socio=self.s1, anno=self.anno_corrente)
+        self.assertEqual(quota.importo, Decimal("15.00"))
+
+    def test_post_sets_stato(self):
+        self._post([self.s1.pk], stato="pagata")
+        quota = Quota.objects.get(socio=self.s1, anno=self.anno_corrente)
+        self.assertEqual(quota.stato, "pagata")
+
+    def test_post_skips_non_eligibili(self):
+        make_quota(self.s1, anno=self.anno_corrente)
+        self._post([self.s1.pk, self.s2.pk])
+        # s1 already had quota, s2 gets new one
+        self.assertEqual(
+            Quota.objects.filter(socio=self.s1, anno=self.anno_corrente).count(), 1
+        )
+        self.assertEqual(
+            Quota.objects.filter(socio=self.s2, anno=self.anno_corrente).count(), 1
+        )
+
+    def test_post_redirects_to_changelist(self):
+        response = self._post([self.s1.pk])
+        self.assertRedirects(response, "/admin/anagrafica/socio/")
+
+    def test_post_requires_login(self):
+        self.client.logout()
+        response = self._post([self.s1.pk])
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_all_non_eligibili_shows_empty_form(self):
+        make_quota(self.s1, anno=self.anno_corrente)
+        make_quota(self.s2, anno=self.anno_corrente)
+        response = self._get([self.s1.pk, self.s2.pk])
+        self.assertEqual(len(response.context["eligibili"]), 0)
+        self.assertEqual(len(response.context["non_eligibili"]), 2)
+
+    def test_context_contains_correct_anno(self):
+        response = self._get([self.s1.pk])
+        self.assertEqual(response.context["anno_corrente"], self.anno_corrente)
+
+    def test_context_contains_data_scadenza(self):
+        from anagrafica.models import get_data_scadenza_default
+
+        response = self._get([self.s1.pk])
+        self.assertEqual(
+            response.context["data_scadenza"],
+            get_data_scadenza_default(self.anno_corrente),
+        )
+
+    def test_multiple_soci_partial_eligibili(self):
+        make_quota(self.s1, anno=self.anno_corrente)
+        response = self._get([self.s1.pk, self.s2.pk, self.s3.pk])
+        self.assertEqual(len(response.context["eligibili"]), 2)
+        self.assertEqual(len(response.context["non_eligibili"]), 1)
+        self.assertIn(self.s2, response.context["eligibili"])
+        self.assertIn(self.s3, response.context["eligibili"])
+        self.assertIn(self.s1, response.context["non_eligibili"])
