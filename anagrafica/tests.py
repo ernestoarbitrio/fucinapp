@@ -1,13 +1,36 @@
 import datetime
 import uuid
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.test import Client, TestCase
 from django.utils import timezone
 
-from anagrafica.models import Quota, Socio, valida_codice_fiscale
+from anagrafica.models import (
+    Quota,
+    Socio,
+    get_data_scadenza_default,
+    valida_codice_fiscale,
+)
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+LUIGI = {
+    "nome": "Luigi",
+    "cognome": "Bianchi",
+    "codice_fiscale": "BNCLGU85B01H501Z",
+    "email": "luigi@example.com",
+}
+
+ANNA = {
+    "nome": "Anna",
+    "cognome": "Verdi",
+    "codice_fiscale": "VRDNNA90A41H501X",
+    "email": "anna@example.com",
+}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -28,9 +51,7 @@ def make_socio(**kwargs):
         "tipo": "SO",
     }
     defaults.update(kwargs)
-    # Bypass signal by using update() after create to avoid auto quota
-    socio = Socio.objects.create(**defaults)
-    return socio
+    return Socio.objects.create(**defaults)
 
 
 def make_quota(socio, **kwargs):
@@ -44,7 +65,6 @@ def make_quota(socio, **kwargs):
         "data_scadenza": today.replace(month=12, day=31),
     }
     defaults.update(kwargs)
-    # Use update_or_create to avoid unique_together issues with auto-created quota
     quota, _ = Quota.objects.update_or_create(
         socio=socio,
         anno=defaults["anno"],
@@ -53,7 +73,50 @@ def make_quota(socio, **kwargs):
     return quota
 
 
-# ── Codice Fiscale Validator ───────────────────────────────────────────────────
+def make_expired_quota(socio, years_ago=1, **kwargs):
+    today = timezone.now().date()
+    year = today.year - years_ago
+    return make_quota(
+        socio,
+        anno=year,
+        data_inizio=datetime.date(year, 1, 1),
+        data_scadenza=datetime.date(year, 12, 31),
+        **kwargs,
+    )
+
+
+def _iscrizione_data(**overrides):
+    data = {
+        "nome": "Mario",
+        "cognome": "Rossi",
+        "data_nascita": "1990-01-01",
+        "luogo_nascita": "Milano",
+        "codice_fiscale": "RBTRST82T13F839G",
+        "via": "Via Roma 1",
+        "comune": "Milano",
+        "cap": "20100",
+        "provincia": "MI",
+        "email": "mario.test@example.com",
+        "consenso_marketing": False,
+        "consenso_immagini": False,
+    }
+    data.update(overrides)
+    return data
+
+
+class AdminTestMixin:
+    """Sets up an authenticated admin client."""
+
+    def setUp(self):
+        super().setUp()
+        self.client = Client()
+        self.admin = User.objects.create_superuser(
+            "admin", "admin@example.com", "password"
+        )
+        self.client.login(username="admin", password="password")
+
+
+# ── Codice Fiscale Validator ──────────────────────────────────────────────────
 
 
 class ValidaCodiceFiscaleTests(TestCase):
@@ -98,46 +161,18 @@ class SocioModelTests(TestCase):
         self.assertIsInstance(self.socio.token, uuid.UUID)
 
     def test_token_is_unique_per_socio(self):
-        altro = make_socio(
-            nome="Luigi",
-            cognome="Bianchi",
-            codice_fiscale="BNCLGU85B01H501Z",
-            email="luigi@example.com",
-        )
+        altro = make_socio(**LUIGI)
         self.assertNotEqual(self.socio.token, altro.token)
 
     def test_codice_fiscale_is_unique(self):
-        from django.db import IntegrityError
-
         with self.assertRaises(IntegrityError):
-            Socio.objects.create(
-                nome="Mario",
-                cognome="Rossi",
-                data_nascita=datetime.date(1990, 1, 1),
-                luogo_nascita="Milano",
-                codice_fiscale="RSSMRA90A01F205X",  # same as setUp
-                via="Via Verdi 2",
-                comune="Roma",
-                cap="00100",
-                provincia="RM",
-                email="altro@example.com",
-            )
+            make_socio(email="altro@example.com")
 
     def test_email_is_unique(self):
-        from django.db import IntegrityError
-
         with self.assertRaises(IntegrityError):
-            Socio.objects.create(
-                nome="Luigi",
-                cognome="Bianchi",
-                data_nascita=datetime.date(1990, 1, 1),
-                luogo_nascita="Roma",
+            make_socio(
                 codice_fiscale="BNCLGU85B01H501Z",
-                via="Via Verdi 2",
-                comune="Roma",
-                cap="00100",
-                provincia="RM",
-                email="mario.rossi@example.com",  # same as setUp
+                email="mario.rossi@example.com",
             )
 
     def test_is_in_regola_false_with_no_quota(self):
@@ -149,15 +184,8 @@ class SocioModelTests(TestCase):
         self.assertTrue(self.socio.is_in_regola)
 
     def test_is_in_regola_false_with_expired_quota(self):
-        today = timezone.now().date()
-        make_quota(
-            self.socio,
-            stato="pagata",
-            anno=today.year - 1,
-            data_inizio=datetime.date(today.year - 1, 1, 1),
-            data_scadenza=datetime.date(today.year - 1, 12, 31),
-        )
-        self.socio.quote.filter(anno=today.year).delete()
+        make_expired_quota(self.socio)
+        self.socio.quote.filter(anno=timezone.now().year).delete()
         self.assertFalse(self.socio.is_in_regola)
 
     def test_is_in_regola_false_with_pending_quota(self):
@@ -173,24 +201,12 @@ class SocioModelTests(TestCase):
         self.assertEqual(self.socio.quota_attiva, quota)
 
     def test_quota_attiva_returns_none_when_expired(self):
-        today = timezone.now().date()
-        make_quota(
-            self.socio,
-            anno=today.year - 1,
-            data_inizio=datetime.date(today.year - 1, 1, 1),
-            data_scadenza=datetime.date(today.year - 1, 12, 31),
-        )
-        self.socio.quote.filter(anno=today.year).delete()
+        make_expired_quota(self.socio)
+        self.socio.quote.filter(anno=timezone.now().year).delete()
         self.assertIsNone(self.socio.quota_attiva)
 
     def test_ultima_quota_returns_most_recent(self):
-        today = timezone.now().date()
-        make_quota(
-            self.socio,
-            anno=today.year - 1,
-            data_inizio=datetime.date(today.year - 1, 1, 1),
-            data_scadenza=datetime.date(today.year - 1, 12, 31),
-        )
+        make_expired_quota(self.socio)
         new = make_quota(self.socio)
         self.assertEqual(self.socio.ultima_quota, new)
 
@@ -203,8 +219,7 @@ class SocioModelTests(TestCase):
         self.assertIn(str(self.socio.token), url)
 
     def test_get_verifica_url_uses_request_if_provided(self):
-        client = Client()
-        request = client.get("/").wsgi_request
+        request = Client().get("/").wsgi_request
         url = self.socio.get_verifica_url(request=request)
         self.assertIn(str(self.socio.token), url)
         self.assertTrue(url.startswith("http"))
@@ -248,11 +263,23 @@ class SocioModelTests(TestCase):
     def test_consenso_immagini_default_is_false(self):
         self.assertFalse(self.socio.consenso_immagini)
 
-    def test_tipo_default_is_so(self):
-        self.assertEqual(self.socio.tipo, "SO")
+    def test_tipo_default_is_ss(self):
+        socio = Socio.objects.create(
+            nome="Test",
+            cognome="Default",
+            data_nascita=datetime.date(1990, 1, 1),
+            luogo_nascita="Roma",
+            codice_fiscale="DFLTST90A01H501X",
+            via="Via Test 1",
+            comune="Roma",
+            cap="00100",
+            provincia="RM",
+            email="default@example.com",
+        )
+        self.assertEqual(socio.tipo, "SS")
 
     def test_tipo_choices_are_valid(self):
-        valid_types = ["VP", "CO", "SG", "DS", "GA", "MS", "SO", "SJ", "AT"]
+        valid_types = ["SS", "SV", "VP", "PS", "CO", "SG", "TE"]
         for tipo in valid_types:
             self.socio.tipo = tipo
             self.socio.save()
@@ -266,7 +293,6 @@ class SocioModelTests(TestCase):
         self.assertEqual(self.socio.provincia, "MI")
 
     def test_signal_creates_initial_quota(self):
-        """Creating a Socio should automatically create an in_attesa quota."""
         socio = Socio.objects.create(
             nome="Test",
             cognome="Signal",
@@ -284,18 +310,32 @@ class SocioModelTests(TestCase):
         self.assertEqual(quota.stato, "in_attesa")
         self.assertEqual(quota.importo, Decimal("5"))
         self.assertEqual(quota.anno, timezone.now().year)
+        self.assertEqual(quota.data_inizio, timezone.now().date())
+        self.assertEqual(
+            quota.data_scadenza, get_data_scadenza_default(timezone.now().year)
+        )
+
+    def test_signal_does_not_create_quota_on_update(self):
+        self.socio.quote.all().delete()
+        self.socio.nome = "Updated"
+        self.socio.save()
+        self.assertEqual(self.socio.quote.count(), 0)
 
     def test_unapproved_socio_excluded_from_active(self):
-        socio = make_socio(
-            codice_fiscale="BNCLGU85B01H501Z",
-            email="pending@example.com",
-            approvato=False,
-        )
+        socio = make_socio(**LUIGI, approvato=False)
         make_quota(socio)
-        self.assertTrue(socio.is_in_regola)  # model doesn't filter by approvato
-        # But admin filters should exclude them
-
+        self.assertTrue(socio.is_in_regola)
         self.assertFalse(socio.approvato)
+
+    def test_save_normalizes_nome_cognome(self):
+        socio = make_socio(
+            nome="  mario ",
+            cognome="  rossi ",
+            codice_fiscale="NRMLZZ90A01H501X",
+            email="norm@example.com",
+        )
+        self.assertEqual(socio.nome, "Mario")
+        self.assertEqual(socio.cognome, "Rossi")
 
 
 # ── Quota Model ───────────────────────────────────────────────────────────────
@@ -316,12 +356,7 @@ class QuotaModelTests(TestCase):
         self.assertTrue(quota.is_attiva)
 
     def test_is_attiva_false_when_expired(self):
-        quota = make_quota(
-            self.socio,
-            anno=self.today.year - 1,
-            data_inizio=datetime.date(self.today.year - 1, 1, 1),
-            data_scadenza=datetime.date(self.today.year - 1, 12, 31),
-        )
+        quota = make_expired_quota(self.socio)
         self.assertFalse(quota.is_attiva)
 
     def test_is_attiva_false_when_not_paid(self):
@@ -333,12 +368,7 @@ class QuotaModelTests(TestCase):
         self.assertFalse(quota.is_attiva)
 
     def test_is_scaduta_true(self):
-        quota = make_quota(
-            self.socio,
-            anno=self.today.year - 1,
-            data_inizio=datetime.date(self.today.year - 1, 1, 1),
-            data_scadenza=datetime.date(self.today.year - 1, 12, 31),
-        )
+        quota = make_expired_quota(self.socio)
         self.assertTrue(quota.is_scaduta)
 
     def test_is_scaduta_false_when_active(self):
@@ -346,8 +376,6 @@ class QuotaModelTests(TestCase):
         self.assertFalse(quota.is_scaduta)
 
     def test_unique_together_anno_socio(self):
-        from django.db import IntegrityError
-
         make_quota(self.socio)
         with self.assertRaises(IntegrityError):
             Quota.objects.create(
@@ -358,14 +386,8 @@ class QuotaModelTests(TestCase):
             )
 
     def test_multiple_years_allowed(self):
-        today = self.today
-        make_quota(
-            self.socio,
-            anno=today.year - 1,
-            data_inizio=datetime.date(today.year - 1, 1, 1),
-            data_scadenza=datetime.date(today.year - 1, 12, 31),
-        )
-        make_quota(self.socio, anno=today.year)
+        make_expired_quota(self.socio)
+        make_quota(self.socio, anno=self.today.year)
         self.assertEqual(self.socio.quote.count(), 2)
 
     def test_quota_attiva_ignores_future_start(self):
@@ -377,8 +399,33 @@ class QuotaModelTests(TestCase):
         )
         self.assertIsNone(self.socio.quota_attiva)
 
+    def test_is_scaduta_false_when_data_scadenza_null(self):
+        quota = make_quota(self.socio, data_scadenza=None)
+        self.assertFalse(quota.is_scaduta)
 
-# ── Verifica Socio View ───────────────────────────────────────────────────────
+    def test_str_includes_stato_display(self):
+        quota = make_quota(self.socio, stato="in_attesa")
+        self.assertIn("In attesa", str(quota))
+
+    def test_ordering_is_descending_anno(self):
+        make_expired_quota(self.socio)
+        make_quota(self.socio, anno=self.today.year)
+        quote = list(self.socio.quote.all())
+        self.assertGreater(quote[0].anno, quote[1].anno)
+
+    def test_clean_rejects_duplicate_anno_socio(self):
+        make_quota(self.socio)
+        duplicate = Quota(
+            socio=self.socio,
+            anno=self.today.year,
+            importo=Decimal("30.00"),
+            stato="pagata",
+        )
+        with self.assertRaises(ValidationError):
+            duplicate.clean()
+
+
+# ── Verifica Socio View ──────────────────────────────────────────────────────
 
 
 class VerificaSocioViewTests(TestCase):
@@ -387,8 +434,7 @@ class VerificaSocioViewTests(TestCase):
         self.socio = make_socio()
 
     def _url(self, token=None):
-        token = token or self.socio.token
-        return f"/anagrafica/verifica/{token}/"
+        return f"/anagrafica/verifica/{token or self.socio.token}/"
 
     def test_valid_token_returns_200(self):
         response = self.client.get(self._url())
@@ -423,14 +469,8 @@ class VerificaSocioViewTests(TestCase):
         self.assertEqual(response.context["ultima_quota"], quota)
 
     def test_expired_quota_shows_not_in_regola(self):
-        today = timezone.now().date()
-        make_quota(
-            self.socio,
-            anno=today.year - 1,
-            data_inizio=datetime.date(today.year - 1, 1, 1),
-            data_scadenza=datetime.date(today.year - 1, 12, 31),
-        )
-        self.socio.quote.filter(anno=today.year).delete()
+        make_expired_quota(self.socio)
+        self.socio.quote.filter(anno=timezone.now().year).delete()
         response = self.client.get(self._url())
         self.assertFalse(response.context["in_regola"])
 
@@ -442,16 +482,16 @@ class VerificaSocioViewTests(TestCase):
 # ── Dashboard View ────────────────────────────────────────────────────────────
 
 
-class DashboardViewTests(TestCase):
-    def setUp(self):
-        self.client = Client()
-        self.admin = User.objects.create_superuser(
-            "admin", "admin@example.com", "password"
-        )
-        self.client.login(username="admin", password="password")
-
+class DashboardViewTests(AdminTestMixin, TestCase):
     def test_dashboard_requires_login(self):
         self.client.logout()
+        response = self.client.get("/anagrafica/dashboard/")
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_dashboard_denied_for_non_staff(self):
+        self.client.logout()
+        User.objects.create_user("user", "user@example.com", "password")
+        self.client.login(username="user", password="password")
         response = self.client.get("/anagrafica/dashboard/")
         self.assertNotEqual(response.status_code, 200)
 
@@ -461,37 +501,21 @@ class DashboardViewTests(TestCase):
 
     def test_totale_count(self):
         make_socio()
-        make_socio(
-            nome="Luigi",
-            cognome="Bianchi",
-            codice_fiscale="BNCLGU85B01H501Z",
-            email="l@example.com",
-        )
+        make_socio(**LUIGI)
         response = self.client.get("/anagrafica/dashboard/")
         self.assertEqual(response.context["totale"], 2)
 
     def test_in_regola_count(self):
         s1 = make_socio()
         make_quota(s1)
-        make_socio(
-            nome="Luigi",
-            cognome="Bianchi",
-            codice_fiscale="BNCLGU85B01H501Z",
-            email="l@example.com",
-        )
+        make_socio(**LUIGI)
         response = self.client.get("/anagrafica/dashboard/")
         self.assertEqual(response.context["in_regola"], 1)
 
     def test_scaduti_count(self):
-        today = timezone.now().date()
         s1 = make_socio()
         s1.quote.all().delete()
-        make_quota(
-            s1,
-            anno=today.year - 1,
-            data_inizio=datetime.date(today.year - 1, 1, 1),
-            data_scadenza=datetime.date(today.year - 1, 12, 31),
-        )
+        make_expired_quota(s1)
         response = self.client.get("/anagrafica/dashboard/")
         self.assertEqual(response.context["scaduti"], 1)
 
@@ -523,20 +547,38 @@ class DashboardViewTests(TestCase):
         response = self.client.get("/anagrafica/dashboard/")
         self.assertEqual(response.context["in_scadenza"], 0)
 
+    def test_socio_with_null_scadenza_excluded_from_all_counts(self):
+        s = make_socio()
+        s.quote.all().delete()
+        make_quota(s, stato="pagata", data_scadenza=None, data_inizio=None)
+        response = self.client.get("/anagrafica/dashboard/")
+        # Has a quota but data_scadenza is null → not in_regola, not scaduti, not senza_quota
+        self.assertEqual(response.context["in_regola"], 0)
+        self.assertEqual(response.context["scaduti"], 0)
+        self.assertEqual(response.context["nessuna_quota"], 0)
+
+    def test_empty_dashboard(self):
+        response = self.client.get("/anagrafica/dashboard/")
+        self.assertEqual(response.context["totale"], 0)
+        self.assertEqual(response.context["in_regola"], 0)
+        self.assertEqual(response.context["scaduti"], 0)
+        self.assertEqual(response.context["nessuna_quota"], 0)
+        self.assertEqual(response.context["in_scadenza"], 0)
+
 
 # ── Budget View ───────────────────────────────────────────────────────────────
 
 
-class BudgetViewTests(TestCase):
-    def setUp(self):
-        self.client = Client()
-        self.admin = User.objects.create_superuser(
-            "admin", "admin@example.com", "password"
-        )
-        self.client.login(username="admin", password="password")
-
+class BudgetViewTests(AdminTestMixin, TestCase):
     def test_budget_requires_login(self):
         self.client.logout()
+        response = self.client.get("/anagrafica/budget/")
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_budget_denied_for_non_staff(self):
+        self.client.logout()
+        User.objects.create_user("user", "user@example.com", "password")
+        self.client.login(username="user", password="password")
         response = self.client.get("/anagrafica/budget/")
         self.assertNotEqual(response.status_code, 200)
 
@@ -560,24 +602,28 @@ class BudgetViewTests(TestCase):
         today = timezone.now().date()
         s = make_socio()
         make_quota(s, importo=Decimal("20.00"), anno=today.year)
-        s2 = make_socio(
-            nome="Luigi",
-            cognome="Bianchi",
-            codice_fiscale="BNCLGU85B01H501Z",
-            email="l@example.com",
-        )
-        make_quota(
-            s2,
-            anno=today.year - 1,
-            importo=Decimal("15.00"),
-            data_inizio=datetime.date(today.year - 1, 1, 1),
-            data_scadenza=datetime.date(today.year - 1, 12, 31),
-        )
+        s2 = make_socio(**LUIGI)
+        make_expired_quota(s2, importo=Decimal("15.00"))
         response = self.client.get("/anagrafica/budget/")
         self.assertEqual(response.context["totale_anno"], Decimal("20.00"))
 
+    def test_empty_budget_returns_zeros(self):
+        response = self.client.get("/anagrafica/budget/")
+        self.assertEqual(response.context["totale_incassato"], 0)
+        self.assertEqual(response.context["totale_anno"], 0)
+        self.assertEqual(response.context["totale_attesa"], 0)
+        self.assertEqual(response.context["media_quota"], 0)
 
-# ── Iscrizione View ───────────────────────────────────────────────────────────
+    def test_media_quota(self):
+        s1 = make_socio()
+        make_quota(s1, importo=Decimal("10.00"))
+        s2 = make_socio(**LUIGI)
+        make_quota(s2, importo=Decimal("30.00"))
+        response = self.client.get("/anagrafica/budget/")
+        self.assertEqual(response.context["media_quota"], Decimal("20.00"))
+
+
+# ── Iscrizione View ──────────────────────────────────────────────────────────
 
 
 class IscrizioneViewTests(TestCase):
@@ -593,25 +639,8 @@ class IscrizioneViewTests(TestCase):
         self.assertTemplateUsed(response, "anagrafica/iscrizione.html")
 
     def test_valid_post_redirects_to_riepilogo(self):
-        response = self.client.post(
-            "/anagrafica/iscrizione/",
-            {
-                "nome": "Mario",
-                "cognome": "Rossi",
-                "data_nascita": "1990-01-01",
-                "luogo_nascita": "Milano",
-                "codice_fiscale": "RBTRST82T13F839G",
-                "via": "Via Roma 1",
-                "comune": "Milano",
-                "cap": "20100",
-                "provincia": "MI",
-                "email": "mario.test@example.com",
-                "consenso_marketing": False,
-                "consenso_immagini": False,
-            },
-        )
+        response = self.client.post("/anagrafica/iscrizione/", _iscrizione_data())
         if response.status_code == 200:
-            # Print form errors to understand why it's not redirecting
             form = response.context.get("form")
             if form:
                 print(form.errors)
@@ -620,18 +649,7 @@ class IscrizioneViewTests(TestCase):
     def test_invalid_cf_shows_error(self):
         response = self.client.post(
             "/anagrafica/iscrizione/",
-            {
-                "nome": "Mario",
-                "cognome": "Rossi",
-                "data_nascita": "1990-01-01",
-                "luogo_nascita": "Milano",
-                "codice_fiscale": "INVALID",
-                "via": "Via Roma 1",
-                "comune": "Milano",
-                "cap": "20100",
-                "provincia": "MI",
-                "email": "mario.test@example.com",
-            },
+            _iscrizione_data(codice_fiscale="INVALID"),
         )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Socio.objects.filter(email="mario.test@example.com").exists())
@@ -640,64 +658,77 @@ class IscrizioneViewTests(TestCase):
         make_socio()
         response = self.client.post(
             "/anagrafica/iscrizione/",
-            {
-                "nome": "Mario",
-                "cognome": "Rossi",
-                "data_nascita": "1990-01-01",
-                "luogo_nascita": "Milano",
-                "codice_fiscale": "RSSMRA90A01F205X",  # already exists
-                "via": "Via Roma 1",
-                "comune": "Milano",
-                "cap": "20100",
-                "provincia": "MI",
-                "email": "altro@example.com",
-            },
+            _iscrizione_data(
+                codice_fiscale="RSSMRA90A01F205X",
+                email="altro@example.com",
+            ),
         )
         self.assertEqual(response.status_code, 200)
+
+    def test_duplicate_email_shows_error(self):
+        make_socio()
+        response = self.client.post(
+            "/anagrafica/iscrizione/",
+            _iscrizione_data(email="mario.rossi@example.com"),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            Socio.objects.filter(email="mario.rossi@example.com").count(), 1
+        )
 
     def test_completata_returns_200(self):
         response = self.client.get("/anagrafica/iscrizione/completata/")
         self.assertEqual(response.status_code, 200)
 
-
-class BulkRenewViewTests(TestCase):
-    def setUp(self):
-        self.client = Client()
-        self.admin = User.objects.create_superuser(
-            "admin", "admin@example.com", "password"
+    def test_minor_without_tutore_shows_errors(self):
+        today = datetime.date.today()
+        minor_dob = today.replace(year=today.year - 10)
+        response = self.client.post(
+            "/anagrafica/iscrizione/",
+            _iscrizione_data(data_nascita=minor_dob.isoformat()),
         )
-        self.client.login(username="admin", password="password")
+        self.assertEqual(response.status_code, 200)
+        form = response.context["form"]
+        for field in [
+            "tutore_nome",
+            "tutore_cognome",
+            "tutore_codice_fiscale",
+            "tutore_email",
+            "tutore_residenza",
+        ]:
+            self.assertIn(field, form.errors)
+
+    def test_cf_with_wrong_checksum_shows_error(self):
+        # Valid format but wrong check digit (last char)
+        response = self.client.post(
+            "/anagrafica/iscrizione/",
+            _iscrizione_data(codice_fiscale="RBTRST82T13F839A"),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("codice_fiscale", response.context["form"].errors)
+
+
+# ── Bulk Renew View ──────────────────────────────────────────────────────────
+
+
+class BulkRenewViewTests(AdminTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
         self.today = timezone.now().date()
         self.anno_corrente = self.today.year
-
         self.s1 = make_socio()
-        self.s2 = make_socio(
-            nome="Luigi",
-            cognome="Bianchi",
-            codice_fiscale="BNCLGU85B01H501Z",
-            email="luigi@example.com",
-        )
-        self.s3 = make_socio(
-            nome="Anna",
-            cognome="Verdi",
-            codice_fiscale="VRDNNA90A41H501X",
-            email="anna@example.com",
-        )
-        # Delete auto-created quotas
+        self.s2 = make_socio(**LUIGI)
+        self.s3 = make_socio(**ANNA)
         Quota.objects.all().delete()
 
     def _get(self, ids):
         qs = "&".join(f"ids={pk}" for pk in ids)
         return self.client.get(f"/anagrafica/bulk-renew/?{qs}")
 
-    def _post(self, ids, **kwargs):
-        data = {
-            "selected_ids": ids,
-            "importo": "10.00",
-            "stato": "in_attesa",
-        }
+    def _post(self, ids, follow=False, **kwargs):
+        data = {"selected_ids": ids, "importo": "10.00", "stato": "in_attesa"}
         data.update(kwargs)
-        return self.client.post("/anagrafica/bulk-renew/", data)
+        return self.client.post("/anagrafica/bulk-renew/", data, follow=follow)
 
     def test_get_shows_confirmation_page(self):
         response = self._get([self.s1.pk, self.s2.pk])
@@ -717,12 +748,7 @@ class BulkRenewViewTests(TestCase):
         self.assertIn(self.s2, response.context["eligibili"])
 
     def test_socio_with_previous_year_quota_is_eligibile(self):
-        make_quota(
-            self.s1,
-            anno=self.anno_corrente - 1,
-            data_inizio=datetime.date(self.anno_corrente - 1, 1, 1),
-            data_scadenza=datetime.date(self.anno_corrente - 1, 12, 31),
-        )
+        make_expired_quota(self.s1)
         response = self._get([self.s1.pk])
         self.assertIn(self.s1, response.context["eligibili"])
 
@@ -741,12 +767,11 @@ class BulkRenewViewTests(TestCase):
         self.assertEqual(quota.data_inizio, self.today)
 
     def test_post_sets_data_scadenza_from_config(self):
-        from anagrafica.models import get_data_scadenza_default
-
         self._post([self.s1.pk])
         quota = Quota.objects.get(socio=self.s1, anno=self.anno_corrente)
-        expected = get_data_scadenza_default(self.anno_corrente)
-        self.assertEqual(quota.data_scadenza, expected)
+        self.assertEqual(
+            quota.data_scadenza, get_data_scadenza_default(self.anno_corrente)
+        )
 
     def test_post_sets_importo(self):
         self._post([self.s1.pk], importo="15.00")
@@ -761,7 +786,6 @@ class BulkRenewViewTests(TestCase):
     def test_post_skips_non_eligibili(self):
         make_quota(self.s1, anno=self.anno_corrente)
         self._post([self.s1.pk, self.s2.pk])
-        # s1 already had quota, s2 gets new one
         self.assertEqual(
             Quota.objects.filter(socio=self.s1, anno=self.anno_corrente).count(), 1
         )
@@ -778,6 +802,24 @@ class BulkRenewViewTests(TestCase):
         response = self._post([self.s1.pk])
         self.assertNotEqual(response.status_code, 200)
 
+    def test_post_denied_for_non_staff(self):
+        self.client.logout()
+        User.objects.create_user("user", "user@example.com", "password")
+        self.client.login(username="user", password="password")
+        response = self._post([self.s1.pk])
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_post_sets_success_message(self):
+        response = self._post([self.s1.pk], follow=True)
+        msgs = [str(m) for m in response.context["messages"]]
+        self.assertTrue(any("1 soci" in m for m in msgs))
+
+    def test_post_sets_warning_for_non_eligibili(self):
+        make_quota(self.s1, anno=self.anno_corrente)
+        response = self._post([self.s1.pk, self.s2.pk], follow=True)
+        msgs = [str(m) for m in response.context["messages"]]
+        self.assertTrue(any("Già rinnovati" in m for m in msgs))
+
     def test_all_non_eligibili_shows_empty_form(self):
         make_quota(self.s1, anno=self.anno_corrente)
         make_quota(self.s2, anno=self.anno_corrente)
@@ -790,8 +832,6 @@ class BulkRenewViewTests(TestCase):
         self.assertEqual(response.context["anno_corrente"], self.anno_corrente)
 
     def test_context_contains_data_scadenza(self):
-        from anagrafica.models import get_data_scadenza_default
-
         response = self._get([self.s1.pk])
         self.assertEqual(
             response.context["data_scadenza"],
@@ -806,3 +846,171 @@ class BulkRenewViewTests(TestCase):
         self.assertIn(self.s2, response.context["eligibili"])
         self.assertIn(self.s3, response.context["eligibili"])
         self.assertIn(self.s1, response.context["non_eligibili"])
+
+    def test_get_with_empty_ids(self):
+        response = self._get([])
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["eligibili"]), 0)
+
+    def test_post_all_non_eligibili_creates_nothing(self):
+        make_quota(self.s1, anno=self.anno_corrente)
+        make_quota(self.s2, anno=self.anno_corrente)
+        before = Quota.objects.count()
+        self._post([self.s1.pk, self.s2.pk])
+        self.assertEqual(Quota.objects.count(), before)
+
+
+# ── get_data_scadenza_default ─────────────────────────────────────────────────
+
+
+class GetDataScadenzaDefaultTests(TestCase):
+    def test_returns_date_from_config(self):
+        result = get_data_scadenza_default(2026)
+        # Default config: month=3, day=31 → 2027-03-31
+        self.assertEqual(result, datetime.date(2027, 3, 31))
+
+    def test_fallback_on_invalid_date(self):
+        from configurazione.models import Configurazione
+
+        config = Configurazione.get()
+        config.scadenza_quota_giorno = 31
+        config.scadenza_quota_mese = 2  # Feb 31 doesn't exist
+        config.save()
+        result = get_data_scadenza_default(2026)
+        self.assertEqual(result, datetime.date(2027, 3, 31))
+
+
+# ── Iscrizione Riepilogo View ─────────────────────────────────────────────────
+
+
+class IscrizioneRiepilogoViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.session_data = {
+            "nome": "Mario",
+            "cognome": "Rossi",
+            "data_nascita": "1990-01-01",
+            "luogo_nascita": "Milano",
+            "codice_fiscale": "RBTRST82T13F839G",
+            "via": "Via Roma 1",
+            "comune": "Milano",
+            "cap": "20100",
+            "provincia": "MI",
+            "email": "riepilogo@example.com",
+            "telefono": "",
+            "consenso_marketing": False,
+            "consenso_immagini": False,
+            "tutore_nome": "",
+            "tutore_cognome": "",
+            "tutore_codice_fiscale": "",
+            "tutore_email": "",
+            "tutore_telefono": "",
+            "tutore_residenza": "",
+        }
+
+    def _set_session(self):
+        # Force session creation via a GET, then inject data
+        self.client.get("/anagrafica/iscrizione/")
+        session = self.client.session
+        session["iscrizione_data"] = self.session_data
+        session.save()
+
+    def test_redirects_without_session_data(self):
+        response = self.client.get("/anagrafica/iscrizione/riepilogo/")
+        self.assertRedirects(response, "/anagrafica/iscrizione/")
+
+    def test_get_renders_with_session_data(self):
+        self._set_session()
+        response = self.client.get("/anagrafica/iscrizione/riepilogo/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "anagrafica/iscrizione_riepilogo.html")
+
+    def test_post_missing_firma_shows_error(self):
+        self._set_session()
+        response = self.client.post(
+            "/anagrafica/iscrizione/riepilogo/",
+            {
+                "consenso_trattamento": "True",
+                "firma": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["error_firma"])
+
+    def test_post_missing_consenso_shows_error(self):
+        self._set_session()
+        response = self.client.post(
+            "/anagrafica/iscrizione/riepilogo/",
+            {
+                "consenso_trattamento": "False",
+                "firma": "data:image/png;base64,abc",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["error_trattamento"])
+
+    @patch("anagrafica.views.invia_email_iscrizione")
+    def test_valid_post_creates_socio_and_redirects(self, mock_email):
+        self._set_session()
+        response = self.client.post(
+            "/anagrafica/iscrizione/riepilogo/",
+            {
+                "consenso_trattamento": "True",
+                "firma": "data:image/png;base64,abc",
+                "consenso_marketing": "True",
+                "consenso_immagini": "False",
+            },
+        )
+        self.assertRedirects(response, "/anagrafica/iscrizione/completata/")
+        socio = Socio.objects.get(email="riepilogo@example.com")
+        self.assertTrue(socio.approvato)
+        self.assertEqual(socio.firma, "data:image/png;base64,abc")
+        self.assertTrue(socio.consenso_marketing)
+        self.assertFalse(socio.consenso_immagini)
+        self.assertTrue(bool(socio.qr_code))
+        mock_email.assert_called_once()
+
+    @patch("anagrafica.views.invia_email_iscrizione")
+    def test_valid_post_creates_initial_quota(self, mock_email):
+        self._set_session()
+        self.client.post(
+            "/anagrafica/iscrizione/riepilogo/",
+            {
+                "consenso_trattamento": "True",
+                "firma": "data:image/png;base64,abc",
+            },
+        )
+        socio = Socio.objects.get(email="riepilogo@example.com")
+        self.assertEqual(socio.quote.count(), 1)
+        quota = socio.quote.first()
+        self.assertEqual(quota.stato, "in_attesa")
+
+    @patch("anagrafica.views.invia_email_iscrizione")
+    def test_valid_post_clears_session(self, mock_email):
+        self._set_session()
+        self.client.post(
+            "/anagrafica/iscrizione/riepilogo/",
+            {
+                "consenso_trattamento": "True",
+                "firma": "data:image/png;base64,abc",
+            },
+        )
+        session = self.client.session
+        self.assertNotIn("iscrizione_data", session)
+
+    def test_post_missing_both_firma_and_consenso(self):
+        self._set_session()
+        response = self.client.post(
+            "/anagrafica/iscrizione/riepilogo/",
+            {"consenso_trattamento": "False", "firma": ""},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["error_firma"])
+        self.assertTrue(response.context["error_trattamento"])
+
+    def test_post_without_session_redirects(self):
+        response = self.client.post(
+            "/anagrafica/iscrizione/riepilogo/",
+            {"consenso_trattamento": "True", "firma": "data:image/png;base64,abc"},
+        )
+        self.assertRedirects(response, "/anagrafica/iscrizione/")
