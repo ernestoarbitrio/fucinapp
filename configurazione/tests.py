@@ -1,8 +1,9 @@
-from django.test import TestCase, Client
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
+from django.utils import timezone
 
-from configurazione.models import Configurazione
 from anagrafica.tests import make_socio
+from configurazione.models import Configurazione, ConfigurazioneAnnuale
 
 
 class ConfigurazioneModelTests(TestCase):
@@ -37,16 +38,45 @@ class ConfigurazioneModelTests(TestCase):
         config = Configurazione.get()
         self.assertEqual(config.nome_associazione, "Fucina Salentina APS")
 
-    def test_default_delta_giorni_iscrizione(self):
-        config = Configurazione.get()
-        self.assertEqual(config.delta_giorni_iscrizione, 365)
 
-    def test_default_delta_giorni_registro(self):
-        config = Configurazione.get()
-        self.assertEqual(config.delta_giorni_registro, 30)
+class ConfigurazioneAnnualeModelTests(TestCase):
+    def test_get_creates_for_current_year(self):
+        anno = timezone.now().year
+        ca = ConfigurazioneAnnuale.get()
+        self.assertEqual(ca.anno, anno)
+        self.assertEqual(ca.configurazione.pk, 1)
 
-    def test_consiglio_direttivo_many_to_many(self):
-        config = Configurazione.get()
+    def test_get_creates_for_specific_year(self):
+        ca = ConfigurazioneAnnuale.get(2024)
+        self.assertEqual(ca.anno, 2024)
+
+    def test_get_returns_same_instance(self):
+        c1 = ConfigurazioneAnnuale.get(2025)
+        c2 = ConfigurazioneAnnuale.get(2025)
+        self.assertEqual(c1.pk, c2.pk)
+
+    def test_different_years_are_independent(self):
+        c1 = ConfigurazioneAnnuale.get(2025)
+        c2 = ConfigurazioneAnnuale.get(2026)
+        self.assertNotEqual(c1.pk, c2.pk)
+        c1.delta_giorni_iscrizione = 100
+        c1.save()
+        c2.refresh_from_db()
+        self.assertEqual(c2.delta_giorni_iscrizione, 365)
+
+    def test_default_values(self):
+        ca = ConfigurazioneAnnuale.get()
+        self.assertEqual(ca.delta_giorni_iscrizione, 365)
+        self.assertEqual(ca.delta_giorni_registro, 30)
+        self.assertEqual(ca.scadenza_quota_giorno, 31)
+        self.assertEqual(ca.scadenza_quota_mese, 3)
+
+    def test_str(self):
+        ca = ConfigurazioneAnnuale.get(2025)
+        self.assertIn("2025", str(ca))
+
+    def test_consiglio_direttivo(self):
+        ca = ConfigurazioneAnnuale.get()
         s1 = make_socio()
         s2 = make_socio(
             nome="Luigi",
@@ -54,15 +84,16 @@ class ConfigurazioneModelTests(TestCase):
             codice_fiscale="BNCLGU85B01H501Z",
             email="luigi@example.com",
         )
-        config.consiglio_direttivo.add(s1, s2)
-        self.assertEqual(config.consiglio_direttivo.count(), 2)
+        ca.consiglio_direttivo.add(s1, s2)
+        self.assertEqual(ca.consiglio_direttivo.count(), 2)
 
-    def test_consiglio_direttivo_remove(self):
-        config = Configurazione.get()
-        s1 = make_socio()
-        config.consiglio_direttivo.add(s1)
-        config.consiglio_direttivo.remove(s1)
-        self.assertEqual(config.consiglio_direttivo.count(), 0)
+    def test_ordering_is_descending_anno(self):
+        ConfigurazioneAnnuale.get(2024)
+        ConfigurazioneAnnuale.get(2026)
+        ConfigurazioneAnnuale.get(2025)
+        annuali = list(ConfigurazioneAnnuale.objects.all())
+        self.assertEqual(annuali[0].anno, 2026)
+        self.assertEqual(annuali[-1].anno, 2024)
 
 
 class ConfigurazioneAdminTests(TestCase):

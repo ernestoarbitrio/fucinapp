@@ -23,9 +23,9 @@ TIPO_CHOICES = [
 
 
 def get_data_scadenza_default(anno):
-    from configurazione.models import Configurazione
+    from configurazione.models import ConfigurazioneAnnuale
 
-    config = Configurazione.get()
+    config = ConfigurazioneAnnuale.get(anno)
     try:
         return date(anno + 1, config.scadenza_quota_mese, config.scadenza_quota_giorno)
     except ValueError:

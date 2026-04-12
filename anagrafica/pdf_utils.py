@@ -22,7 +22,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from configurazione.models import Configurazione
+from configurazione.models import Configurazione, ConfigurazioneAnnuale
 
 
 class BorderCanvas(rl_canvas.Canvas):
@@ -42,6 +42,7 @@ class BorderCanvas(rl_canvas.Canvas):
 
 def genera_pdf_iscrizione(socio, quota):
     config = Configurazione.get()
+    config_anno = ConfigurazioneAnnuale.get(quota.anno)
     buffer = io.BytesIO()
 
     doc = SimpleDocTemplate(
@@ -139,13 +140,17 @@ def genera_pdf_iscrizione(socio, quota):
     indirizzo = f"{socio.via}, {socio.cap} {socio.comune} - {socio.provincia}"
     cf = socio.codice_fiscale or "___________"
     email = socio.email or "___________"
-    delta = config.delta_giorni_iscrizione
-    oggi = (date.today() - timedelta(days=delta)).strftime("%d/%m/%Y")
+    delta = config_anno.delta_giorni_iscrizione
     data_doc = (
-        (quota.data_pagamento - timedelta(days=delta)).strftime("%d/%m/%Y")
+        quota.data_pagamento - timedelta(days=delta)
         if quota.data_pagamento
-        else oggi
+        else quota.data_inizio - timedelta(days=delta)
+        if quota.data_inizio
+        else socio.created_at
     )
+    if data_doc.year != quota.anno and quota.data_inizio:
+        data_doc = quota.data_inizio
+    data_doc = data_doc.strftime("%d/%m/%Y")
 
     story.append(
         Paragraph(
@@ -317,6 +322,7 @@ def genera_pdf_elenco_soci(soci_queryset, anno):
     if anno is None:
         anno = timezone.now().year
     config = Configurazione.get()
+    config_anno = ConfigurazioneAnnuale.get(anno)
 
     buffer = io.BytesIO()
     today = date.today()
@@ -545,10 +551,10 @@ def genera_pdf_elenco_soci(soci_queryset, anno):
     )
     # Build firma cell content
     firma_cell_content = [Paragraph("FIRMA", box_style)]
-    if config.firma_presidente and config.firma_presidente.name:
+    if config_anno.firma_presidente and config_anno.firma_presidente.name:
         try:
             firma_img = Image(
-                config.firma_presidente.path,
+                config_anno.firma_presidente.path,
                 width=5 * cm,
                 height=1.2 * cm,
             )

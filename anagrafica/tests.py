@@ -870,12 +870,12 @@ class GetDataScadenzaDefaultTests(TestCase):
         self.assertEqual(result, datetime.date(2027, 3, 31))
 
     def test_fallback_on_invalid_date(self):
-        from configurazione.models import Configurazione
+        from configurazione.models import ConfigurazioneAnnuale
 
-        config = Configurazione.get()
-        config.scadenza_quota_giorno = 31
-        config.scadenza_quota_mese = 2  # Feb 31 doesn't exist
-        config.save()
+        config_anno = ConfigurazioneAnnuale.get(2026)
+        config_anno.scadenza_quota_giorno = 31
+        config_anno.scadenza_quota_mese = 2  # Feb 31 doesn't exist
+        config_anno.save()
         result = get_data_scadenza_default(2026)
         self.assertEqual(result, datetime.date(2027, 3, 31))
 

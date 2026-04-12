@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from anagrafica.models import Socio
 
@@ -26,6 +27,38 @@ class Configurazione(models.Model):
         blank=True,
         null=True,
     )
+
+    class Meta:
+        verbose_name = "Configurazione"
+        verbose_name_plural = "Configurazione"
+
+    def __str__(self):
+        return self.nome_associazione
+
+    @classmethod
+    def get(cls):
+        """Always return the single configuration instance."""
+        obj, _ = cls.objects.get_or_create(
+            pk=1, defaults={"nome_associazione": settings.DEFAILT_NAME_CONF}
+        )
+        return obj
+
+    def clean(self):
+        if not self.pk and Configurazione.objects.exists():
+            raise ValidationError("Può esistere solo una configurazione.")
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+
+class ConfigurazioneAnnuale(models.Model):
+    configurazione = models.ForeignKey(
+        Configurazione,
+        on_delete=models.CASCADE,
+        related_name="annuali",
+    )
+    anno = models.PositiveIntegerField(verbose_name="Anno", unique=True)
     firma_presidente = models.ImageField(
         verbose_name="Firma del presidente",
         upload_to="configurazione/firme/",
@@ -60,24 +93,21 @@ class Configurazione(models.Model):
     )
 
     class Meta:
-        verbose_name = "Configurazione"
-        verbose_name_plural = "Configurazione"
+        verbose_name = "Configurazione annuale"
+        verbose_name_plural = "Configurazioni annuali"
+        ordering = ["-anno"]
 
     def __str__(self):
-        return self.nome_associazione
+        return f"{self.configurazione.nome_associazione} — {self.anno}"
 
     @classmethod
-    def get(cls):
-        """Always return the single configuration instance."""
+    def get(cls, anno=None):
+        """Return the configuration for the given year, creating it if needed."""
+        if anno is None:
+            anno = timezone.now().year
+        config = Configurazione.get()
         obj, _ = cls.objects.get_or_create(
-            pk=1, defaults={"nome_associazione": settings.DEFAILT_NAME_CONF}
+            anno=anno,
+            defaults={"configurazione": config},
         )
         return obj
-
-    def clean(self):
-        if not self.pk and Configurazione.objects.exists():
-            raise ValidationError("Può esistere solo una configurazione.")
-
-    def save(self, *args, **kwargs):
-        self.pk = 1  # always force pk=1
-        super().save(*args, **kwargs)

@@ -2,12 +2,18 @@ from django.contrib import admin
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from configurazione.models import Configurazione
+from configurazione.models import Configurazione, ConfigurazioneAnnuale
+
+
+class ConfigurazioneAnnualeInline(admin.StackedInline):
+    model = ConfigurazioneAnnuale
+    extra = 0
+    filter_horizontal = ("consiglio_direttivo",)
 
 
 @admin.register(Configurazione)
 class ConfigurazioneAdmin(admin.ModelAdmin):
-    filter_horizontal = ("consiglio_direttivo",)
+    inlines = [ConfigurazioneAnnualeInline]
 
     fieldsets = (
         (
@@ -24,38 +30,14 @@ class ConfigurazioneAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Firma del presidente",
-            {
-                "fields": ("firma_presidente",),
-            },
-        ),
-        (
             "Indirizzo",
             {
                 "fields": ("via", "comune", "provincia", "cap"),
             },
         ),
-        (
-            "Consiglio direttivo",
-            {
-                "fields": ("consiglio_direttivo",),
-            },
-        ),
-        (
-            "Impostazioni",
-            {
-                "fields": (
-                    "delta_giorni_iscrizione",
-                    "delta_giorni_registro",
-                    "scadenza_quota_giorno",
-                    "scadenza_quota_mese",
-                ),
-            },
-        ),
     )
 
     def has_add_permission(self, request):
-        # Only allow one instance
         return not Configurazione.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
