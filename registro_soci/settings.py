@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "anagrafica",
     "configurazione",
     "reports",
+    "django_apscheduler",
 ]
 
 MIDDLEWARE = [
