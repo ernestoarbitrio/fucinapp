@@ -262,3 +262,17 @@ class Quota(models.Model):
                 raise ValidationError(
                     f"Esiste già una quota per {self.socio} per l'anno {self.anno}."
                 )
+        created = self.socio.created_at.date() if self.socio_id else None
+        if created:
+            if self.data_pagamento and self.data_pagamento < created:
+                raise ValidationError(
+                    {
+                        "data_pagamento": "La data di pagamento non può essere anteriore alla data di registrazione del socio."
+                    }
+                )
+            if self.data_inizio and self.data_inizio < created:
+                raise ValidationError(
+                    {
+                        "data_inizio": "L'inizio validità non può essere anteriore alla data di registrazione del socio."
+                    }
+                )

@@ -424,6 +424,30 @@ class QuotaModelTests(TestCase):
         with self.assertRaises(ValidationError):
             duplicate.clean()
 
+    def test_clean_rejects_data_pagamento_before_created_at(self):
+        created = self.socio.created_at.date()
+        quota = make_quota(
+            self.socio, data_pagamento=created - datetime.timedelta(days=1)
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            quota.clean()
+        self.assertIn("data_pagamento", ctx.exception.message_dict)
+
+    def test_clean_rejects_data_inizio_before_created_at(self):
+        created = self.socio.created_at.date()
+        quota = make_quota(self.socio, data_inizio=created - datetime.timedelta(days=1))
+        with self.assertRaises(ValidationError) as ctx:
+            quota.clean()
+        self.assertIn("data_inizio", ctx.exception.message_dict)
+
+    def test_clean_accepts_dates_on_created_at(self):
+        created = self.socio.created_at.date()
+        quota = make_quota(self.socio, data_pagamento=created, data_inizio=created)
+        try:
+            quota.clean()
+        except ValidationError:
+            self.fail("clean() raised ValidationError for dates equal to created_at")
+
 
 # ── Verifica Socio View ──────────────────────────────────────────────────────
 

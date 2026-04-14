@@ -1,7 +1,7 @@
 import base64
 import io
 import os
-from datetime import date, timedelta
+from datetime import date
 
 from django.conf import settings
 from reportlab.lib import colors
@@ -42,7 +42,6 @@ class BorderCanvas(rl_canvas.Canvas):
 
 def genera_pdf_iscrizione(socio, quota):
     config = Configurazione.get()
-    config_anno = ConfigurazioneAnnuale.get(quota.anno)
     buffer = io.BytesIO()
 
     doc = SimpleDocTemplate(
@@ -140,16 +139,12 @@ def genera_pdf_iscrizione(socio, quota):
     indirizzo = f"{socio.via}, {socio.cap} {socio.comune} - {socio.provincia}"
     cf = socio.codice_fiscale or "___________"
     email = socio.email or "___________"
-    delta = config_anno.delta_giorni_iscrizione
-    data_doc = (
-        quota.data_pagamento - timedelta(days=delta)
-        if quota.data_pagamento
-        else quota.data_inizio - timedelta(days=delta)
-        if quota.data_inizio
-        else socio.created_at
-    )
-    if data_doc.year != quota.anno and quota.data_inizio:
-        data_doc = quota.data_inizio
+    if quota.data_pagamento:
+        data_doc = quota.data_pagamento.replace(day=1)
+    elif quota.data_inizio:
+        data_doc = quota.data_inizio.replace(day=1)
+    else:
+        data_doc = socio.created_at.date().replace(day=1)
     data_doc = data_doc.strftime("%d/%m/%Y")
 
     story.append(
@@ -470,13 +465,12 @@ def genera_pdf_elenco_soci(soci_queryset, anno):
     rows = [col_headers]
 
     for socio in soci_queryset:
-        quota_corrente = socio.quote.filter(stato="pagata", anno=anno).first()
-        numero_tessera = str(quota_corrente.pk)
-        data_tess = (
-            quota_corrente.data_pagamento.strftime("%d/%m/%y")
-            if quota_corrente and quota_corrente.data_pagamento
-            else (socio.created_at.strftime("%d/%m/%y") if socio.created_at else "")
-        )
+        quota_corr = socio.quote.filter(stato="pagata", anno=anno).first()
+        numero_tessera = str(quota_corr.pk)
+        if quota_corr and quota_corr.data_pagamento:
+            data_tess = quota_corr.data_pagamento.replace(day=1).strftime("%d/%m/%y")
+        else:
+            data_tess = socio.created_at.date().replace(day=1).strftime("%d/%m/%y")
         luogo_nascita = f"{socio.luogo_nascita}\n{socio.data_nascita.strftime('%d/%m/%y') if socio.data_nascita else ''}"
         residenza = f"{socio.via or ''}"
         comune = f"{socio.comune or ''}"
