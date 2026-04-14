@@ -192,7 +192,7 @@ def crea_quota_iniziale(sender, instance, created, **kwargs):
         anno=anno,
         importo=5,
         stato="in_attesa",
-        data_inizio=today,
+        data_inizio=today.replace(day=1),
         data_scadenza=data_scadenza,
     )
     # Generate PDF
@@ -264,15 +264,20 @@ class Quota(models.Model):
                 )
         created = self.socio.created_at.date() if self.socio_id else None
         if created:
-            if self.data_pagamento and self.data_pagamento < created:
-                raise ValidationError(
-                    {
-                        "data_pagamento": "La data di pagamento non può essere anteriore alla data di registrazione del socio."
-                    }
-                )
-            if self.data_inizio and self.data_inizio < created:
-                raise ValidationError(
-                    {
-                        "data_inizio": "L'inizio validità non può essere anteriore alla data di registrazione del socio."
-                    }
-                )
+            created_ym = (created.year, created.month)
+            if self.data_pagamento:
+                dp_ym = (self.data_pagamento.year, self.data_pagamento.month)
+                if dp_ym < created_ym:
+                    raise ValidationError(
+                        {
+                            "data_pagamento": "Il mese/anno di pagamento non può essere anteriore al mese/anno di registrazione del socio."
+                        }
+                    )
+            if self.data_inizio:
+                di_ym = (self.data_inizio.year, self.data_inizio.month)
+                if di_ym < created_ym:
+                    raise ValidationError(
+                        {
+                            "data_inizio": "Il mese/anno di inizio validità non può essere anteriore al mese/anno di registrazione del socio."
+                        }
+                    )

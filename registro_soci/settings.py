@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "import_export",
     "anagrafica",
     "configurazione",
+    "reports",
 ]
 
 MIDDLEWARE = [

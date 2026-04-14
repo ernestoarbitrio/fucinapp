@@ -10,35 +10,20 @@
 {{ block.super }}
 <script>
     document.addEventListener("DOMContentLoaded", function () {
-    // Add registro soci button only on soci changelist
-    if (window.location.pathname === "/admin/anagrafica/socio/") {
-        const tools = document.querySelector(".object-tools");
-        if (tools) {
-            const li = document.createElement("li");
-            li.innerHTML = `<a href="/admin/anagrafica/socio/registro-soci-pdf/"
-                class=export_link>
-                📋 Registro soci PDF
-            </a>`;
-            tools.prepend(li);
-
-            const li2 = document.createElement("li");
-            li2.innerHTML = `<a href="/admin/anagrafica/socio/moduli-iscrizione-pdf/"
-                class=export_link>
-                📄 Moduli iscrizione PDF
-            </a>`;
-            tools.prepend(li2);
-        }
-    }
-
-    // existing sidebar code...
-});
-document.addEventListener("DOMContentLoaded", function () {
     const sidebar = document.getElementById("nav-sidebar");
     if (!sidebar) return;
 
-    const section = document.createElement("div");
-    section.className = "module";
-    section.innerHTML = `
+    // Hide the auto-generated Reports app section from Django
+    sidebar.querySelectorAll(".module").forEach(function(mod) {
+        var link = mod.querySelector("caption a");
+        if (link && link.textContent.trim() === "Reports" && !mod.dataset.custom) {
+            mod.style.display = "none";
+        }
+    });
+
+    const stats = document.createElement("div");
+    stats.className = "module";
+    stats.innerHTML = `
         <table>
             <caption>
                 <a href="/anagrafica/dashboard/" class="section" title="Dashboard">
@@ -61,7 +46,42 @@ document.addEventListener("DOMContentLoaded", function () {
             </tr>
         </table>
     `;
-    sidebar.appendChild(section);
+    sidebar.appendChild(stats);
+
+    const reports = document.createElement("div");
+    reports.className = "module";
+    reports.dataset.custom = "true";
+    reports.innerHTML = `
+        <table>
+            <caption>
+                <a href="/admin/reports/verbale/" class="section" title="Reports">
+                    Reports
+                </a>
+            </caption>
+            <tr>
+                <th scope="row">
+                    <a href="/admin/reports/verbale/">Verbali</a>
+                </th>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">
+                    <a href="/admin/anagrafica/socio/registro-soci-pdf/">Registro soci PDF</a>
+                </th>
+                <td></td>
+                <td></td>
+            </tr>
+            <tr>
+                <th scope="row">
+                    <a href="/admin/anagrafica/socio/moduli-iscrizione-pdf/">Moduli iscrizione PDF</a>
+                </th>
+                <td></td>
+                <td></td>
+            </tr>
+        </table>
+    `;
+    sidebar.appendChild(reports);
 });
 </script>
 {% endblock %}

@@ -310,7 +310,7 @@ class SocioModelTests(TestCase):
         self.assertEqual(quota.stato, "in_attesa")
         self.assertEqual(quota.importo, Decimal("5"))
         self.assertEqual(quota.anno, timezone.now().year)
-        self.assertEqual(quota.data_inizio, timezone.now().date())
+        self.assertEqual(quota.data_inizio, timezone.now().date().replace(day=1))
         self.assertEqual(
             quota.data_scadenza, get_data_scadenza_default(timezone.now().year)
         )
@@ -424,29 +424,34 @@ class QuotaModelTests(TestCase):
         with self.assertRaises(ValidationError):
             duplicate.clean()
 
-    def test_clean_rejects_data_pagamento_before_created_at(self):
+    def test_clean_rejects_data_pagamento_before_created_month(self):
         created = self.socio.created_at.date()
-        quota = make_quota(
-            self.socio, data_pagamento=created - datetime.timedelta(days=1)
-        )
+        # Previous month is always invalid
+        earlier = (created.replace(day=1) - datetime.timedelta(days=1)).replace(day=1)
+        quota = make_quota(self.socio, data_pagamento=earlier)
         with self.assertRaises(ValidationError) as ctx:
             quota.clean()
         self.assertIn("data_pagamento", ctx.exception.message_dict)
 
-    def test_clean_rejects_data_inizio_before_created_at(self):
+    def test_clean_rejects_data_inizio_before_created_month(self):
         created = self.socio.created_at.date()
-        quota = make_quota(self.socio, data_inizio=created - datetime.timedelta(days=1))
+        earlier = (created.replace(day=1) - datetime.timedelta(days=1)).replace(day=1)
+        quota = make_quota(self.socio, data_inizio=earlier)
         with self.assertRaises(ValidationError) as ctx:
             quota.clean()
         self.assertIn("data_inizio", ctx.exception.message_dict)
 
-    def test_clean_accepts_dates_on_created_at(self):
+    def test_clean_accepts_same_month_different_day(self):
         created = self.socio.created_at.date()
-        quota = make_quota(self.socio, data_pagamento=created, data_inizio=created)
+        # First day of same month — always valid even if before created day
+        first = created.replace(day=1)
+        quota = make_quota(self.socio, data_pagamento=first, data_inizio=first)
         try:
             quota.clean()
         except ValidationError:
-            self.fail("clean() raised ValidationError for dates equal to created_at")
+            self.fail(
+                "clean() raised ValidationError for same month/year as created_at"
+            )
 
 
 # ── Verifica Socio View ──────────────────────────────────────────────────────

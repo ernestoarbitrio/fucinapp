@@ -1,9 +1,9 @@
 import random
-from datetime import date, timedelta
+from datetime import date
 
 from django.core.management.base import BaseCommand
 
-from anagrafica.models import Quota, Socio
+from anagrafica.models import Quota, Socio, get_data_scadenza_default
 
 NOMI = [
     "Marco",
@@ -73,6 +73,7 @@ COMUNI = [
 ]
 PROVINCE = ["LE", "BA", "BR", "TA"]
 CAPS = ["73100", "70100", "72100", "74100", "73014", "73028", "73024", "73042"]
+TIPI = ["SS", "SS", "SS", "SS", "SV", "SV", "VP", "PS", "CO", "SG", "TE"]
 
 CF_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 DIGITS = "0123456789"
@@ -195,7 +196,6 @@ class Command(BaseCommand):
             Socio.objects.all().delete()
             self.stdout.write(self.style.WARNING("Database svuotato."))
 
-        today = date.today()
         n = options["soci"]
         created = 0
 
@@ -204,9 +204,9 @@ class Command(BaseCommand):
             cognome = random.choice(COGNOMI)
             cf = genera_cf_casuale(nome, cognome, i)
 
-            # Ensure uniqueness
+            # Ensure uniqueness — regenerate entirely to keep valid checksum
             while Socio.objects.filter(codice_fiscale=cf).exists():
-                cf = cf[:14] + random.choice(CF_CHARS) + cf[15]
+                cf = genera_cf_casuale(nome, cognome, i + random.randint(100, 9999))
 
             email = f"{nome.lower()}.{cognome.lower().replace(' ', '')}{i}@example.com"
             while Socio.objects.filter(email=email).exists():
@@ -231,44 +231,42 @@ class Command(BaseCommand):
                 email=email,
                 telefono=f"33{random.randint(1000000, 9999999)}",
                 approvato=True,
+                tipo=random.choice(TIPI),
                 consenso_marketing=random.choice([True, False]),
                 consenso_immagini=random.choice([True, False]),
             )
 
-            # Scenario based on index
-            scenario = i % 4
+            socio.genera_qr_code()
+            socio.save(update_fields=["qr_code"])
 
-            if scenario == 0:
-                # In regola
-                Quota.objects.filter(socio=socio).update(
-                    stato="pagata",
+            # Delete auto-created quota, we'll create our own
+            Quota.objects.filter(socio=socio).delete()
+
+            for anno in [2025, 2026]:
+                scadenza = get_data_scadenza_default(anno)
+                data_inizio = date(anno, 1, 1)
+
+                # Vary scenarios
+                if anno == 2025:
+                    stato = "pagata"
+                    data_pagamento = date(2025, 1, random.randint(1, 28))
+                elif i % 4 == 3:
+                    # Some 2026 quotas still pending
+                    stato = "in_attesa"
+                    data_pagamento = None
+                else:
+                    stato = "pagata"
+                    data_pagamento = date(2026, 1, random.randint(1, 28))
+
+                Quota.objects.create(
+                    socio=socio,
+                    anno=anno,
+                    stato=stato,
                     importo=random.choice([5, 10, 20]),
-                    data_inizio=today.replace(month=1, day=1),
-                    data_scadenza=today.replace(month=12, day=31),
-                    data_pagamento=today.replace(month=1, day=random.randint(1, 15)),
-                )
-            elif scenario == 1:
-                # Scaduta
-                Quota.objects.filter(socio=socio).update(
-                    stato="pagata",
-                    importo=random.choice([5, 10, 20]),
-                    data_inizio=date(today.year - 1, 1, 1),
-                    data_scadenza=date(today.year - 1, 12, 31),
-                    data_pagamento=date(today.year - 1, 1, random.randint(1, 15)),
-                )
-            elif scenario == 2:
-                # In scadenza entro 30 giorni
-                scadenza = today + timedelta(days=random.randint(1, 29))
-                Quota.objects.filter(socio=socio).update(
-                    stato="pagata",
-                    importo=random.choice([5, 10, 20]),
-                    data_inizio=scadenza - timedelta(days=365),
+                    data_inizio=data_inizio,
                     data_scadenza=scadenza,
-                    data_pagamento=scadenza - timedelta(days=365),
+                    data_pagamento=data_pagamento,
                 )
-            else:
-                # Nessuna quota / in attesa — leave the auto-created one as is
-                pass
 
             created += 1
 

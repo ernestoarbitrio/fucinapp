@@ -24,6 +24,41 @@ from reportlab.platypus import (
 
 from configurazione.models import Configurazione, ConfigurazioneAnnuale
 
+DEFAULT_LOGO = os.path.join("anagrafica", "static", "anagrafica", "logo-fucina.jpeg")
+
+
+def _load_logo(config, width=2.2 * cm, height=2.2 * cm):
+    """Return a ReportLab Image for the association logo, or None."""
+    path = (
+        config.logo.path
+        if config.logo
+        else os.path.join(settings.BASE_DIR, DEFAULT_LOGO)
+    )
+    if os.path.exists(path):
+        return Image(path, width=width, height=height)
+    return None
+
+
+def _decode_firma_image(firma_data, width=6 * cm, height=2 * cm):
+    """Decode a base64 firma string into a ReportLab Image, or None."""
+    if not firma_data:
+        return None
+    try:
+        if "," in firma_data:
+            firma_data = firma_data.split(",")[1]
+        return Image(
+            io.BytesIO(base64.b64decode(firma_data)), width=width, height=height
+        )
+    except Exception:
+        return None
+
+
+def _first_of_month(d):
+    """Return the first day of the month for a date or datetime."""
+    if hasattr(d, "date"):
+        d = d.date()
+    return d.replace(day=1)
+
 
 class BorderCanvas(rl_canvas.Canvas):
     def showPage(self):
@@ -83,14 +118,7 @@ def genera_pdf_iscrizione(socio, quota):
     story = []
 
     # ── HEADER ──────────────────────────────────────────────────────────────
-    # logo
-    logo_path = None
-    if config.logo:
-        logo_path = config.logo.path
-    else:
-        logo_path = os.path.join(
-            settings.BASE_DIR, "anagrafica", "static", "anagrafica", "logo-fucina.jpeg"
-        )
+    logo_img = _load_logo(config)
 
     # Title centered
     story.append(Paragraph("MODULO DI RICHIESTA TESSERAMENTO", bold_center))
@@ -105,8 +133,7 @@ def genera_pdf_iscrizione(socio, quota):
         ],
     )
     # Address + logo on the right
-    if os.path.exists(logo_path):
-        logo_img = Image(logo_path, width=2.2 * cm, height=2.2 * cm)
+    if logo_img:
         address_data = [["", address_block, logo_img]]
         address_table = Table(address_data, colWidths=[W * 0.55, W * 0.3, W * 0.07])
     else:
@@ -140,11 +167,11 @@ def genera_pdf_iscrizione(socio, quota):
     cf = socio.codice_fiscale or "___________"
     email = socio.email or "___________"
     if quota.data_pagamento:
-        data_doc = quota.data_pagamento.replace(day=1)
+        data_doc = _first_of_month(quota.data_pagamento)
     elif quota.data_inizio:
-        data_doc = quota.data_inizio.replace(day=1)
+        data_doc = _first_of_month(quota.data_inizio)
     else:
-        data_doc = socio.created_at.date().replace(day=1)
+        data_doc = _first_of_month(socio.created_at)
     data_doc = data_doc.strftime("%d/%m/%Y")
 
     story.append(
@@ -189,22 +216,14 @@ def genera_pdf_iscrizione(socio, quota):
             Paragraph("Firma", normal),
         ]
     ]
-    if socio.firma:
-        try:
-            firma_data = socio.firma
-            if "," in firma_data:
-                firma_data = firma_data.split(",")[1]
-            firma_bytes = base64.b64decode(firma_data)
-            firma_buffer = io.BytesIO(firma_bytes)
-            firma_img = Image(firma_buffer, width=6 * cm, height=2 * cm)
-            firma_row_data = [
-                [
-                    Paragraph(f"Data &nbsp;&nbsp; <b>{data_doc}</b>", normal),
-                    firma_img,
-                ]
+    firma_img = _decode_firma_image(socio.firma)
+    if firma_img:
+        firma_row_data = [
+            [
+                Paragraph(f"Data &nbsp;&nbsp; <b>{data_doc}</b>", normal),
+                firma_img,
             ]
-        except Exception:
-            pass
+        ]
 
     firma_table = Table(firma_row_data, colWidths=[W * 0.4, W * 0.6])
     firma_table.setStyle(
@@ -260,17 +279,9 @@ def genera_pdf_iscrizione(socio, quota):
             Paragraph("Firma", normal),
         ]
     ]
-    if socio.firma:
-        try:
-            firma_data = socio.firma
-            if "," in firma_data:
-                firma_data = firma_data.split(",")[1]
-            firma_bytes = base64.b64decode(firma_data)
-            firma_buffer = io.BytesIO(firma_bytes)
-            firma_img2 = Image(firma_buffer, width=6 * cm, height=2 * cm)
-            privacy_firma_data = [[Paragraph("", normal), firma_img2]]
-        except Exception:
-            pass
+    firma_img2 = _decode_firma_image(socio.firma)
+    if firma_img2:
+        privacy_firma_data = [[Paragraph("", normal), firma_img2]]
 
     privacy_firma_table = Table(privacy_firma_data, colWidths=[W * 0.4, W * 0.6])
     privacy_firma_table.setStyle(
@@ -400,20 +411,11 @@ def genera_pdf_elenco_soci(soci_queryset, anno):
     story = []
 
     # Header
-    logo_path = None
-    if config.logo:
-        logo_path = config.logo.path
-    else:
-        logo_path = os.path.join(
-            settings.BASE_DIR, "anagrafica", "static", "anagrafica", "logo-fucina.jpeg"
-        )
-    if os.path.exists(logo_path):
-        logo_img = Image(logo_path, width=1.8 * cm, height=1.8 * cm)
-        logo_img.hAlign = "CENTER"
+    logo_img = _load_logo(config, width=1.8 * cm, height=1.8 * cm)
 
     header_data = [
         [
-            logo_img if os.path.exists(logo_path) else Paragraph("", tiny),
+            logo_img or Paragraph("", tiny),
             [
                 Paragraph(
                     f"ASSOCIAZIONE: {config.nome_associazione.upper()}", title_style
@@ -468,9 +470,9 @@ def genera_pdf_elenco_soci(soci_queryset, anno):
         quota_corr = socio.quote.filter(stato="pagata", anno=anno).first()
         numero_tessera = str(quota_corr.pk)
         if quota_corr and quota_corr.data_pagamento:
-            data_tess = quota_corr.data_pagamento.replace(day=1).strftime("%d/%m/%y")
+            data_tess = _first_of_month(quota_corr.data_pagamento).strftime("%d/%m/%y")
         else:
-            data_tess = socio.created_at.date().replace(day=1).strftime("%d/%m/%y")
+            data_tess = _first_of_month(socio.created_at).strftime("%d/%m/%y")
         luogo_nascita = f"{socio.luogo_nascita}\n{socio.data_nascita.strftime('%d/%m/%y') if socio.data_nascita else ''}"
         residenza = f"{socio.via or ''}"
         comune = f"{socio.comune or ''}"
@@ -482,7 +484,7 @@ def genera_pdf_elenco_soci(soci_queryset, anno):
             Paragraph(f"{socio.cognome} {socio.nome}", tiny_bold),
             Paragraph(luogo_nascita, tiny),
             Paragraph(socio.codice_fiscale or "", tiny),
-            Paragraph(socio.tipo or "SO", tiny),
+            Paragraph(socio.tipo or "SS", tiny),
             Paragraph(residenza, tiny),
             Paragraph(prov, tiny),
             Paragraph(comune, tiny),
@@ -646,18 +648,10 @@ def genera_pdf_tessera(socio, quota):
     story = []
 
     # ── PAGE 1: Front — Logos ─────────────────────────────────────────────────
-    # Logo principale
-    logo_path = None
-    if config.logo:
-        logo_path = config.logo.path
-    else:
-        logo_path = os.path.join(
-            settings.BASE_DIR, "anagrafica", "static", "anagrafica", "logo-fucina.jpeg"
-        )
+    logo_left = _load_logo(config, width=18 * mm, height=18 * mm)
 
-    if os.path.exists(logo_path):
-        logo_left = Image(logo_path, width=18 * mm, height=18 * mm)
     # Logo secondario
+    logo_right = Paragraph("", small)
     if config.logo_secondario:
         try:
             logo_right = Image(
