@@ -185,6 +185,8 @@ class NewsletterAdmin(admin.ModelAdmin):
 
     @admin.display(description="N° destinatari")
     def conteggio_destinatari(self, obj):
+        if not obj.pk:
+            return "-"
         if obj.stato == "inviata":
             return obj.num_destinatari
         return obj.get_destinatari_queryset().count()
