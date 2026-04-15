@@ -130,6 +130,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.environ.get("MEDIA_ROOT", str(BASE_DIR / "media"))
 
+SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000").rstrip("/")
+
 DEFAILT_NAME_CONF = "Fucina Salentina APS"
 
 # EMAIL CONF
