@@ -158,6 +158,41 @@ class Newsletter(models.Model):
             )
         return qs
 
+    def render_html(self):
+        """Wrap corpo in the email template with logo header and association footer."""
+        from django.conf import settings
+
+        from configurazione.models import Configurazione
+
+        config = Configurazione.get()
+        logo_url = ""
+        if config.logo:
+            base = getattr(settings, "SITE_URL", "")
+            logo_url = f"{base}{config.logo.url}" if base else ""
+
+        return f"""<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#f5f5f5; padding:20px; margin:0; }}
+    .wrapper {{ max-width:600px; margin:0 auto; background:#fff; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,0.08); }}
+    .header {{ text-align:center; padding:24px 20px 12px; border-bottom:1px solid #eee; }}
+    .header img {{ max-height:60px; }}
+    .header h2 {{ color:#2c5364; margin:8px 0 0; font-size:1.1rem; }}
+    .content {{ padding:24px 32px; color:#333; font-size:0.95rem; line-height:1.6; }}
+    .footer {{ text-align:center; padding:16px 20px; border-top:1px solid #eee; font-size:0.78rem; color:#aaa; }}
+</style></head>
+<body><div class="wrapper">
+    <div class="header">
+        {"<img src='" + logo_url + "' alt='Logo'>" if logo_url else ""}
+        <h2>{config.nome_associazione}</h2>
+    </div>
+    <div class="content">{self.corpo}</div>
+    <div class="footer">
+        {config.nome_associazione} &middot; {config.via}, {config.cap} {config.comune}<br>
+        {config.email}
+    </div>
+</div></body></html>"""
+
     def invia(self):
         """Send the newsletter via Resend to all matching recipients."""
         import logging
@@ -178,6 +213,7 @@ class Newsletter(models.Model):
         if not emails:
             return 0
 
+        html = self.render_html()
         sent = 0
         # Send in batches of 50
         for i in range(0, len(emails), 50):
@@ -189,7 +225,7 @@ class Newsletter(models.Model):
                         "to": [config.email or settings.DEFAULT_FROM_EMAIL],
                         "bcc": batch,
                         "subject": self.oggetto,
-                        "html": self.corpo,
+                        "html": html,
                     }
                 )
                 sent += len(batch)

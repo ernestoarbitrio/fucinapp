@@ -115,6 +115,7 @@ class NewsletterAdmin(admin.ModelAdmin):
         context = {
             **self.admin_site.each_context(request),
             "newsletter": newsletter,
+            "rendered_html": newsletter.render_html(),
             "destinatari": destinatari,
             "num_destinatari": destinatari.count(),
             "opts": self.model._meta,
@@ -142,7 +143,7 @@ class NewsletterAdmin(admin.ModelAdmin):
                         "from": settings.DEFAULT_FROM_EMAIL,
                         "to": [email],
                         "subject": f"[TEST] {newsletter.oggetto}",
-                        "html": newsletter.corpo,
+                        "html": newsletter.render_html(),
                     }
                 )
                 messages.success(request, f"✅ Email di test inviata a {email}.")
