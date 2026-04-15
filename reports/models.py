@@ -160,15 +160,19 @@ class Newsletter(models.Model):
 
     def render_html(self):
         """Wrap corpo in the email template with logo header and association footer."""
-        from django.conf import settings
+        import base64
 
         from configurazione.models import Configurazione
 
         config = Configurazione.get()
-        logo_url = ""
+        logo_tag = ""
         if config.logo:
-            base = getattr(settings, "SITE_URL", "")
-            logo_url = f"{base}{config.logo.url}" if base else ""
+            try:
+                with open(config.logo.path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode()
+                logo_tag = f'<img src="data:image/png;base64,{encoded}" alt="Logo" style="max-height:60px;">'
+            except Exception:
+                pass
 
         return f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
@@ -183,7 +187,7 @@ class Newsletter(models.Model):
 </style></head>
 <body><div class="wrapper">
     <div class="header">
-        {"<img src='" + logo_url + "' alt='Logo'>" if logo_url else ""}
+        {logo_tag}
         <h2>{config.nome_associazione}</h2>
     </div>
     <div class="content">{self.corpo}</div>
