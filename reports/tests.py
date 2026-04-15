@@ -1,14 +1,16 @@
 import datetime
 from decimal import Decimal
 from io import StringIO
+from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import Client, TestCase
 
 from anagrafica.models import Quota
 from anagrafica.tests import LUIGI, make_socio
-from reports.models import Verbale
+from reports.models import Newsletter, Verbale
 
 
 def _make_quota(socio, anno, mese):
@@ -140,3 +142,100 @@ class GeneraVerbaleMensileTests(TestCase):
         call_command("genera_verbale_mensile", stdout=out)
         self.assertEqual(Verbale.objects.count(), 0)
         self.assertIn("Nessun socio", out.getvalue())
+
+
+class NewsletterModelTests(TestCase):
+    def test_str(self):
+        nl = Newsletter.objects.create(oggetto="Test", corpo="<p>Hi</p>")
+        self.assertIn("Test", str(nl))
+        self.assertIn("Bozza", str(nl))
+
+    def test_default_stato_is_bozza(self):
+        nl = Newsletter.objects.create(oggetto="Test", corpo="<p>Hi</p>")
+        self.assertEqual(nl.stato, "bozza")
+
+    def test_get_destinatari_tutti(self):
+        s1 = make_socio(consenso_marketing=True)
+        make_socio(**LUIGI, consenso_marketing=False)
+        nl = Newsletter(destinatari="tutti")
+        qs = nl.get_destinatari_queryset()
+        self.assertIn(s1, qs)
+        self.assertEqual(qs.count(), 1)
+
+    def test_get_destinatari_in_regola(self):
+        s1 = make_socio(consenso_marketing=True)
+        _make_quota(s1, 2026, 1)
+        s2 = make_socio(**LUIGI, consenso_marketing=True)
+        Quota.objects.filter(socio=s2).delete()
+        nl = Newsletter(destinatari="in_regola")
+        qs = nl.get_destinatari_queryset()
+        self.assertIn(s1, qs)
+        self.assertNotIn(s2, qs)
+
+    def test_get_destinatari_scaduti(self):
+        s1 = make_socio(consenso_marketing=True)
+        Quota.objects.filter(socio=s1).delete()
+        _make_quota(s1, 2024, 1)  # old expired quota
+        s2 = make_socio(**LUIGI, consenso_marketing=True)
+        _make_quota(s2, 2026, 1)  # active quota
+        nl = Newsletter(destinatari="scaduti")
+        qs = nl.get_destinatari_queryset()
+        self.assertIn(s1, qs)
+        self.assertNotIn(s2, qs)
+
+    def test_excludes_non_approvati(self):
+        make_socio(consenso_marketing=True, approvato=False)
+        nl = Newsletter(destinatari="tutti")
+        self.assertEqual(nl.get_destinatari_queryset().count(), 0)
+
+    @patch("resend.Emails.send")
+    def test_invia_sends_and_updates_stato(self, mock_send):
+        make_socio(consenso_marketing=True)
+        nl = Newsletter.objects.create(
+            oggetto="Test", corpo="<p>Ciao</p>", destinatari="tutti"
+        )
+        sent = nl.invia()
+        self.assertEqual(sent, 1)
+        nl.refresh_from_db()
+        self.assertEqual(nl.stato, "inviata")
+        self.assertEqual(nl.num_destinatari, 1)
+        self.assertIsNotNone(nl.data_invio)
+        mock_send.assert_called_once()
+
+    @patch("resend.Emails.send")
+    def test_invia_returns_zero_when_no_recipients(self, mock_send):
+        nl = Newsletter.objects.create(
+            oggetto="Test", corpo="<p>Ciao</p>", destinatari="tutti"
+        )
+        sent = nl.invia()
+        self.assertEqual(sent, 0)
+        mock_send.assert_not_called()
+
+
+class NewsletterAdminTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        User.objects.create_superuser("admin", "admin@example.com", "password")
+        self.client.login(username="admin", password="password")
+
+    def test_add_page_loads(self):
+        response = self.client.get("/admin/reports/newsletter/add/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_preview_page(self):
+        nl = Newsletter.objects.create(oggetto="Test", corpo="<p>Hi</p>")
+        response = self.client.get(f"/admin/reports/newsletter/{nl.pk}/preview/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Test")
+
+    def test_sent_newsletter_cannot_be_edited(self):
+        nl = Newsletter.objects.create(
+            oggetto="Test", corpo="<p>Hi</p>", stato="inviata"
+        )
+        response = self.client.post(
+            f"/admin/reports/newsletter/{nl.pk}/change/",
+            {"oggetto": "Changed", "corpo": "<p>X</p>", "destinatari": "tutti"},
+        )
+        nl.refresh_from_db()
+        assert response.status_code == 403
+        self.assertEqual(nl.oggetto, "Test")  # unchanged

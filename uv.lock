@@ -344,6 +344,19 @@ wheels = [
 ]
 
 [[package]]
+name = "django-tinymce"
+version = "5.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django", version = "5.2.12", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0a/71/e9556c8bc1d99c0cb4081af0abc6440d7cf53c87b6c7da7b117f2de24881/django_tinymce-5.0.0.tar.gz", hash = "sha256:6257669ed596accf5fa967ff3061276b2c5352baac1bbc658fcd8252b12ca38a", size = 1161002, upload-time = "2025-10-21T19:25:25.831Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/21/22/b7b9299b40995b524bb2f6d61ae55bd690858630ff5e0ba9a06210313195/django_tinymce-5.0.0-py3-none-any.whl", hash = "sha256:c2e9c5efd2cc6c036f4c57e602b133180433e2bd1513b897089d3c4fb4e20579", size = 1400312, upload-time = "2025-10-21T19:25:24.113Z" },
+]
+
+[[package]]
 name = "docutils"
 version = "0.22.4"
 source = { registry = "https://pypi.org/simple" }
@@ -393,6 +406,7 @@ dependencies = [
     { name = "django", version = "6.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "django-apscheduler" },
     { name = "django-import-export" },
+    { name = "django-tinymce" },
     { name = "gunicorn" },
     { name = "psycopg2-binary" },
     { name = "pypdf" },
@@ -423,6 +437,7 @@ requires-dist = [
     { name = "django", specifier = ">=5.2.12" },
     { name = "django-apscheduler", specifier = ">=0.7.0" },
     { name = "django-import-export", specifier = ">=4.4.0" },
+    { name = "django-tinymce", specifier = ">=5.0.0" },
     { name = "gunicorn", specifier = ">=25.3.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "pypdf", specifier = ">=6.9.2" },

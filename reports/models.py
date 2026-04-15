@@ -89,3 +89,117 @@ class Verbale(models.Model):
         """Auto-assign soci with paid quota where data_inizio <= verbale date,
         not already in another verbale for the same year."""
         self.soci.set(self._soci_eligibili())
+
+
+class Newsletter(models.Model):
+    DESTINATARI_CHOICES = [
+        ("tutti", "Tutti i soci (con consenso)"),
+        ("in_regola", "Solo soci in regola"),
+        ("scaduti", "Solo soci con quota scaduta"),
+    ]
+    STATO_CHOICES = [
+        ("bozza", "Bozza"),
+        ("inviata", "Inviata"),
+    ]
+
+    oggetto = models.CharField(verbose_name="Oggetto", max_length=200)
+    corpo = models.TextField(verbose_name="Corpo email (HTML)")
+    destinatari = models.CharField(
+        verbose_name="Destinatari",
+        max_length=20,
+        choices=DESTINATARI_CHOICES,
+        default="tutti",
+    )
+    stato = models.CharField(
+        verbose_name="Stato",
+        max_length=10,
+        choices=STATO_CHOICES,
+        default="bozza",
+        editable=False,
+    )
+    data_invio = models.DateTimeField(
+        verbose_name="Data invio", null=True, blank=True, editable=False
+    )
+    num_destinatari = models.PositiveIntegerField(
+        verbose_name="N° destinatari", default=0, editable=False
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Newsletter"
+        verbose_name_plural = "Newsletter"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.oggetto} ({self.get_stato_display()})"
+
+    def get_destinatari_queryset(self):
+        """Return soci queryset filtered by destinatari choice and consenso_marketing."""
+        from django.utils import timezone
+
+        qs = Socio.objects.filter(consenso_marketing=True, approvato=True)
+        if self.destinatari == "in_regola":
+            today = timezone.now().date()
+            qs = qs.filter(
+                quote__stato="pagata",
+                quote__data_inizio__lte=today,
+                quote__data_scadenza__gte=today,
+            ).distinct()
+        elif self.destinatari == "scaduti":
+            today = timezone.now().date()
+            qs = (
+                qs.exclude(
+                    quote__stato="pagata",
+                    quote__data_inizio__lte=today,
+                    quote__data_scadenza__gte=today,
+                )
+                .filter(quote__isnull=False)
+                .distinct()
+            )
+        return qs
+
+    def invia(self):
+        """Send the newsletter via Resend to all matching recipients."""
+        import logging
+
+        import resend
+        from django.conf import settings
+        from django.utils import timezone
+
+        from configurazione.models import Configurazione
+
+        logger = logging.getLogger(__name__)
+        config = Configurazione.get()
+        resend.api_key = settings.RESEND_API_KEY
+
+        destinatari = self.get_destinatari_queryset()
+        emails = list(destinatari.values_list("email", flat=True))
+
+        if not emails:
+            return 0
+
+        sent = 0
+        # Send in batches of 50
+        for i in range(0, len(emails), 50):
+            batch = emails[i : i + 50]
+            try:
+                resend.Emails.send(
+                    {
+                        "from": settings.DEFAULT_FROM_EMAIL,
+                        "to": [config.email or settings.DEFAULT_FROM_EMAIL],
+                        "bcc": batch,
+                        "subject": self.oggetto,
+                        "html": self.corpo,
+                    }
+                )
+                sent += len(batch)
+            except Exception:
+                logger.exception(
+                    "Errore invio newsletter batch %d-%d", i, i + len(batch)
+                )
+
+        self.stato = "inviata"
+        self.data_invio = timezone.now()
+        self.num_destinatari = sent
+        self.save(update_fields=["stato", "data_invio", "num_destinatari"])
+        return sent
