@@ -1,10 +1,13 @@
 import base64
+import logging
 
 import resend
 from django.conf import settings
 
 from anagrafica.pdf_utils import genera_pdf_tessera
 from configurazione.models import Configurazione
+
+logger = logging.getLogger(__name__)
 
 
 def invia_email_iscrizione(socio, quota):
@@ -74,10 +77,8 @@ def invia_email_iscrizione(socio, quota):
             }
         )
 
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).error(f"Errore invio email iscrizione: {e}")
+    except Exception:
+        logger.exception("Errore invio email iscrizione a %s", socio.email)
 
 
 def invia_tessera(socio, quota):
@@ -137,7 +138,6 @@ def invia_tessera(socio, quota):
             }
         )
 
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).error(f"Errore invio email iscrizione: {e}")
+    except Exception:
+        logger.exception("Errore invio tessera a %s", socio.email)
+        raise

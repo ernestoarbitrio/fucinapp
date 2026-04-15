@@ -312,9 +312,12 @@ $(document).ready(function () {
         zeroRecords: "Nessun risultato trovato",
     };
 
-    const dt1 = $("#table-scadenza").DataTable({ language: lang, pageLength: 10, order: [[3, "asc"]] });
-    const dt2 = $("#table-scaduta").DataTable({ language: lang, pageLength: 10, order: [[3, "asc"]] });
-    const dt3 = $("#table-senza").DataTable({ language: lang, pageLength: 10, order: [[0, "asc"]] });
+    if (!$("#table-scadenza tbody tr td[colspan]").length)
+        $("#table-scadenza").DataTable({ language: lang, pageLength: 10, order: [[3, "asc"]] });
+    if (!$("#table-scaduta tbody tr td[colspan]").length)
+        $("#table-scaduta").DataTable({ language: lang, pageLength: 10, order: [[3, "asc"]] });
+    if ($("#table-senza tbody tr").length)
+        $("#table-senza").DataTable({ language: lang, pageLength: 10, order: [[0, "asc"]] });
 
     // Tab switching
     $(".dash-tab").on("click", function () {

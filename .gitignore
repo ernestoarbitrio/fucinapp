@@ -13,3 +13,5 @@ wheels/
 .ruff_cache
 media
 db.sqlite3
+staticfiles/*
+!staticfiles/.gitkeep

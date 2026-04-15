@@ -30,4 +30,5 @@ urlpatterns = [
     path("", RedirectView.as_view(url="/anagrafica/iscrizione/"), name="home"),
     path("admin/", admin.site.urls),
     path("anagrafica/", include("anagrafica.urls")),
+    path("tinymce/", include("tinymce.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,4 +1,5 @@
 import io
+import logging
 import re
 import uuid
 from datetime import date
@@ -125,11 +126,23 @@ class Socio(models.Model):
     @property
     def quota_attiva(self):
         """Returns the current active subscription, or None if expired/missing."""
+        today = timezone.now().date()
+        # Use prefetched cache if available
+        if "quote" in getattr(self, "_prefetched_objects_cache", {}):
+            active = [
+                q
+                for q in self.quote.all()
+                if q.stato == "pagata"
+                and q.data_inizio
+                and q.data_scadenza
+                and q.data_inizio <= today <= q.data_scadenza
+            ]
+            return max(active, key=lambda q: q.data_scadenza) if active else None
         return (
             self.quote.filter(
                 stato="pagata",
-                data_inizio__lte=timezone.now().date(),
-                data_scadenza__gte=timezone.now().date(),
+                data_inizio__lte=today,
+                data_scadenza__gte=today,
             )
             .order_by("-data_scadenza")
             .first()
@@ -141,6 +154,11 @@ class Socio(models.Model):
 
     @property
     def ultima_quota(self):
+        if "quote" in getattr(self, "_prefetched_objects_cache", {}):
+            quote = list(self.quote.all())
+            return (
+                max(quote, key=lambda q: q.data_scadenza or date.min) if quote else None
+            )
         return self.quote.order_by("-data_scadenza").first()
 
     def get_verifica_url(self, request=None):
@@ -200,10 +218,10 @@ def crea_quota_iniziale(sender, instance, created, **kwargs):
         from anagrafica.pdf_utils import genera_pdf_iscrizione
 
         genera_pdf_iscrizione(instance, quota)
-    except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).error(f"Errore generazione PDF iscrizione: {e}")
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "Errore generazione PDF iscrizione per %s", instance
+        )
 
 
 class Quota(models.Model):

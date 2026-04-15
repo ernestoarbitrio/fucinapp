@@ -1,32 +1,23 @@
-import io
-
 from django import forms
-from django.contrib import admin, messages
+from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
 from django.forms import HiddenInput
-from django.http import FileResponse, HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import path, reverse
+from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from import_export import fields, resources
 from import_export.admin import ExportMixin
 from import_export.formats.base_formats import XLSX
-from pypdf import PdfReader, PdfWriter
 
-from anagrafica.email_utils import invia_tessera
+from anagrafica.admin_mixins import SocioPdfMixin
 from anagrafica.forms import PROVINCE_ITALIANE
 from anagrafica.models import (
     Quota,
     Socio,
     get_data_scadenza_default,
     valida_codice_fiscale,
-)
-from anagrafica.pdf_utils import (
-    genera_pdf_elenco_soci,
-    genera_pdf_iscrizione,
-    genera_pdf_tessera,
 )
 
 MODAL_HTML = """
@@ -239,97 +230,14 @@ class SocioAdminForm(forms.ModelForm):
     def clean_codice_fiscale(self):
         cf = self.cleaned_data.get("codice_fiscale", "").upper().strip()
 
-        # run the base format validator
         try:
             valida_codice_fiscale(cf)
         except forms.ValidationError as e:
             raise forms.ValidationError(e.message)
 
-        # verify the control character (last letter)
-        odd_values = {
-            "0": 1,
-            "1": 0,
-            "2": 5,
-            "3": 7,
-            "4": 9,
-            "5": 13,
-            "6": 15,
-            "7": 17,
-            "8": 19,
-            "9": 21,
-            "A": 1,
-            "B": 0,
-            "C": 5,
-            "D": 7,
-            "E": 9,
-            "F": 13,
-            "G": 15,
-            "H": 17,
-            "I": 19,
-            "J": 21,
-            "K": 2,
-            "L": 4,
-            "M": 18,
-            "N": 20,
-            "O": 11,
-            "P": 3,
-            "Q": 6,
-            "R": 8,
-            "S": 12,
-            "T": 14,
-            "U": 16,
-            "V": 10,
-            "W": 22,
-            "X": 25,
-            "Y": 24,
-            "Z": 23,
-        }
-        even_values = {
-            "0": 0,
-            "1": 1,
-            "2": 2,
-            "3": 3,
-            "4": 4,
-            "5": 5,
-            "6": 6,
-            "7": 7,
-            "8": 8,
-            "9": 9,
-            "A": 0,
-            "B": 1,
-            "C": 2,
-            "D": 3,
-            "E": 4,
-            "F": 5,
-            "G": 6,
-            "H": 7,
-            "I": 8,
-            "J": 9,
-            "K": 10,
-            "L": 11,
-            "M": 12,
-            "N": 13,
-            "O": 14,
-            "P": 15,
-            "Q": 16,
-            "R": 17,
-            "S": 18,
-            "T": 19,
-            "U": 20,
-            "V": 21,
-            "W": 22,
-            "X": 23,
-            "Y": 24,
-            "Z": 25,
-        }
-        total = 0
-        for i, char in enumerate(cf[:15]):
-            if (i + 1) % 2 == 0:
-                total += even_values[char]
-            else:
-                total += odd_values[char]
+        from anagrafica.cf_utils import calcola_carattere_controllo
 
-        expected = chr(total % 26 + ord("A"))
+        expected = calcola_carattere_controllo(cf[:15])
         if cf[15] != expected:
             raise forms.ValidationError(
                 f"Il carattere di controllo del codice fiscale non è corretto (atteso: {expected})."
@@ -407,7 +315,7 @@ class QuotaInline(admin.StackedInline):
 
 
 @admin.register(Socio)
-class SocioAdmin(ExportMixin, admin.ModelAdmin):
+class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
     form = SocioAdminForm
     list_display = (
         "cognome",
@@ -428,6 +336,9 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
     actions = ["approva_soci", "rifiuta_soci", "bulk_renew"]
     resource_classes = [SocioResource]
     formats = [XLSX]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).prefetch_related("quote")
 
     fieldsets = (
         (
@@ -588,194 +499,6 @@ class SocioAdmin(ExportMixin, admin.ModelAdmin):
     def rifiuta_soci(self, request, queryset):
         updated = queryset.update(approvato=False)
         self.message_user(request, f"❌ {updated} soci rifiutati.")
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom = [
-            path(
-                "<int:socio_id>/quota/<int:quota_id>/genera-pdf/",
-                self.admin_site.admin_view(self.genera_pdf_view),
-                name="anagrafica_socio_genera_pdf",
-            ),
-            path(
-                "<int:socio_id>/quota/<int:quota_id>/genera-tessera/",
-                self.admin_site.admin_view(self.genera_pdf_tessera_view),
-                name="anagrafica_socio_genera_tessera_pdf",
-            ),
-            path(
-                "registro-soci-pdf/",
-                self.admin_site.admin_view(self.registro_soci_pdf_view),
-                name="anagrafica_socio_registro_pdf",
-            ),
-            path(
-                "<int:socio_id>/quota/<int:quota_id>/invia-tessera-email/",
-                self.admin_site.admin_view(self.invia_tessera_email_view),
-                name="anagrafica_socio_invia_tessera_email",
-            ),
-            path(
-                "moduli-iscrizione-pdf/",
-                self.admin_site.admin_view(self.moduli_iscrizione_pdf_view),
-                name="anagrafica_socio_moduli_iscrizione_pdf",
-            ),
-        ]
-        return custom + urls
-
-    def genera_pdf_view(self, request, socio_id, quota_id):
-        socio = get_object_or_404(Socio, pk=socio_id)
-        quota = get_object_or_404(Quota, pk=quota_id, socio=socio)
-        try:
-            buffer = genera_pdf_iscrizione(socio, quota)
-            return FileResponse(
-                buffer,
-                as_attachment=False,
-                filename=f"iscrizione_{socio.codice_fiscale}_{quota.anno}.pdf",
-                content_type="application/pdf",
-            )
-        except Exception as e:
-            messages.error(request, f"Errore nella generazione del PDF: {e}")
-            return HttpResponseRedirect(
-                reverse("admin:anagrafica_socio_change", args=[socio_id])
-            )
-
-    def genera_pdf_tessera_view(self, request, socio_id, quota_id):
-        socio = get_object_or_404(Socio, pk=socio_id)
-        quota = get_object_or_404(Quota, pk=quota_id, socio=socio)
-        try:
-            buffer = genera_pdf_tessera(socio, quota)
-            return FileResponse(
-                buffer,
-                as_attachment=False,
-                filename=f"tessera_{socio.codice_fiscale}_{quota.anno}.pdf",
-                content_type="application/pdf",
-            )
-        except Exception as e:
-            messages.error(request, f"Errore nella generazione del PDF: {e}")
-            return HttpResponseRedirect(
-                reverse("admin:anagrafica_socio_change", args=[socio_id])
-            )
-
-    def invia_tessera_email_view(self, request, socio_id, quota_id):
-        socio = get_object_or_404(Socio, pk=socio_id)
-        quota = get_object_or_404(Quota, pk=quota_id, socio=socio)
-        try:
-            invia_tessera(socio, quota)
-            messages.success(request, f"✅ Tessera inviata via email a {socio.email}.")
-        except Exception as e:
-            messages.error(request, f"Errore invio email: {e}")
-        return HttpResponseRedirect(
-            reverse("admin:anagrafica_socio_change", args=[socio_id])
-        )
-
-    @admin.action(description="📋 Esporta registro soci PDF")
-    def export_registro_soci_pdf(self, request, queryset):
-        from django.http import FileResponse
-        from django.utils import timezone
-
-        from anagrafica.pdf_utils import genera_pdf_elenco_soci
-
-        soci = (
-            queryset.filter(approvato=True)
-            .prefetch_related("quote")
-            .order_by("cognome", "nome")
-        )
-        buffer = genera_pdf_elenco_soci(soci)
-        today = timezone.now().date()
-        return FileResponse(
-            buffer,
-            as_attachment=True,
-            filename=f"elenco_soci_{today.strftime('%Y%m%d')}.pdf",
-            content_type="application/pdf",
-        )
-
-    def registro_soci_pdf_view(self, request):
-        anno_corrente = timezone.now().year
-        anni = Quota.objects.values_list("anno", flat=True).distinct().order_by("-anno")
-
-        if request.method == "POST":
-            anno = int(request.POST.get("anno", anno_corrente))
-
-            soci = (
-                Socio.objects.filter(
-                    approvato=True,
-                    quote__stato="pagata",
-                    quote__anno=anno,
-                )
-                .prefetch_related("quote")
-                .distinct()
-                .order_by("cognome", "nome")
-            )
-
-            buffer = genera_pdf_elenco_soci(soci, anno=anno)
-            return FileResponse(
-                buffer,
-                as_attachment=True,
-                filename=f"registro_soci_{anno}.pdf",
-                content_type="application/pdf",
-            )
-
-        context = {
-            **self.admin_site.each_context(request),
-            "title": "Genera registro soci",
-            "anni": anni,
-            "anno_corrente": anno_corrente,
-            "opts": self.model._meta,
-        }
-        return render(request, "admin/anagrafica/registro_soci_select.html", context)
-
-    def moduli_iscrizione_pdf_view(self, request):
-        anno_corrente = timezone.now().year
-        anni = Quota.objects.values_list("anno", flat=True).distinct().order_by("-anno")
-
-        if request.method == "POST":
-            anno = int(request.POST.get("anno", anno_corrente))
-
-            soci = (
-                Socio.objects.filter(
-                    approvato=True,
-                    quote__anno=anno,
-                )
-                .prefetch_related("quote")
-                .distinct()
-                .order_by("cognome", "nome")
-            )
-
-            writer = PdfWriter()
-            errors = []
-
-            for socio in soci:
-                quota = socio.quote.filter(anno=anno).first()
-                if not quota:
-                    continue
-                try:
-                    buffer = genera_pdf_iscrizione(socio, quota)
-                    reader = PdfReader(buffer)
-                    for page in reader.pages:
-                        writer.add_page(page)
-                except Exception as e:
-                    errors.append(f"{socio}: {e}")
-
-            if errors:
-                for err in errors:
-                    messages.warning(request, err)
-
-            output = io.BytesIO()
-            writer.write(output)
-            output.seek(0)
-
-            response = HttpResponse(output, content_type="application/pdf")
-            response["Content-Disposition"] = (
-                f'attachment; filename="moduli_iscrizione_{anno}.pdf"'
-            )
-            return response
-
-        context = {
-            **self.admin_site.each_context(request),
-            "title": "Genera moduli iscrizione",
-            "anni": anni,
-            "anno_corrente": anno_corrente,
-            "opts": self.model._meta,
-        }
-        return render(request, "admin/anagrafica/moduli_iscrizione.html", context)
 
 
 @admin.register(Quota)

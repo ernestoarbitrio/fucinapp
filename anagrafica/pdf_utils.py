@@ -791,3 +791,156 @@ def genera_pdf_tessera(socio, quota):
     doc.build(story, canvasmaker=BorderCanvas)
     buffer.seek(0)
     return buffer
+
+
+MESI = [
+    "",
+    "gennaio",
+    "febbraio",
+    "marzo",
+    "aprile",
+    "maggio",
+    "giugno",
+    "luglio",
+    "agosto",
+    "settembre",
+    "ottobre",
+    "novembre",
+    "dicembre",
+]
+
+
+def genera_pdf_verbale(verbale):
+    config = Configurazione.get()
+    config_anno = ConfigurazioneAnnuale.get(verbale.data.year)
+    buffer = io.BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=2.5 * cm,
+        leftMargin=2.5 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2.5 * cm,
+    )
+    W = A4[0] - 5 * cm
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "title_verbale",
+        parent=styles["Normal"],
+        fontSize=13,
+        fontName="Helvetica-Bold",
+        alignment=TA_CENTER,
+        spaceAfter=20,
+    )
+    body_style = ParagraphStyle(
+        "body_verbale",
+        parent=styles["Normal"],
+        fontSize=10,
+        leading=16,
+        alignment=TA_JUSTIFY,
+    )
+
+    story = []
+
+    # Title
+    story.append(
+        Paragraph(
+            f"VERBALE DI ASSEMBLEA DEL CONSIGLIO DIRETTIVO N. {verbale.numero_progressivo}",
+            title_style,
+        )
+    )
+    story.append(Spacer(1, 0.5 * cm))
+
+    # Body paragraph
+    d = verbale.data
+    mese_nome = MESI[d.month]
+    soci = list(verbale.soci.all())
+
+    story.append(
+        Paragraph(
+            f"L'anno <b>{d.year}</b> il giorno <b>{d.day}</b> del mese di <b>{mese_nome.title()}</b> si è riunito il consiglio direttivo "
+            f"della <b>{config.nome_associazione}</b>, con sede in {config.comune} alla {config.via}, "
+            f"per discutere e deliberare l'ammissione dei nuovi soci.",
+            body_style,
+        )
+    )
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(
+        Paragraph(
+            f"Sono presenti: <b>{verbale.consiglio_direttivo}</b>.",
+            body_style,
+        )
+    )
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(
+        Paragraph(
+            "Il Presidente, constatata la presenza di tutti i membri del Consiglio Direttivo, "
+            "dichiara l'assemblea validamente costituita per deliberare sull'ammissione di nuovi associati.",
+            body_style,
+        )
+    )
+    story.append(Spacer(1, 0.3 * cm))
+
+    story.append(
+        Paragraph(
+            "Il Consiglio Direttivo, valutate le domande di ammissione presentate e non riscontrando "
+            "nelle stesse fattori ostativi, accetta nella loro qualità di nuovi soci i seguenti signori:",
+            body_style,
+        )
+    )
+    story.append(Spacer(1, 0.3 * cm))
+
+    # Soci list
+    story.append(
+        Paragraph(
+            ", ".join(f"<b>{s.nome} {s.cognome}</b>" for s in soci) + ".",
+            body_style,
+        )
+    )
+
+    story.append(Spacer(1, 1.5 * cm))
+
+    # Firma presidente (right-aligned)
+    firma_label = ParagraphStyle(
+        "firma_label",
+        parent=styles["Normal"],
+        fontSize=10,
+        alignment=TA_CENTER,
+    )
+    firma_cell = [Paragraph("Il Presidente", firma_label)]
+
+    if config_anno.firma_presidente and config_anno.firma_presidente.name:
+        try:
+            firma_img = Image(
+                config_anno.firma_presidente.path,
+                width=6 * cm,
+                height=2 * cm,
+            )
+            firma_img.hAlign = "CENTER"
+            firma_cell.append(firma_img)
+        except Exception:
+            pass
+
+    firma_table = Table(
+        [[Paragraph("", body_style), firma_cell]],
+        colWidths=[W * 0.5, W * 0.5],
+    )
+    firma_table.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+            ]
+        )
+    )
+    story.append(firma_table)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer

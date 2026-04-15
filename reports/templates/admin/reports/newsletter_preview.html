@@ -1,0 +1,34 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}Anteprima: {{ newsletter.oggetto }}{% endblock %}
+
+{% block content %}
+<div style="max-width:800px; margin:0 auto;">
+    <h1>Anteprima Newsletter</h1>
+
+    <table style="width:100%; margin-bottom:20px;">
+        <tr><td><strong>Oggetto:</strong></td><td>{{ newsletter.oggetto }}</td></tr>
+        <tr><td><strong>Destinatari:</strong></td><td>{{ newsletter.get_destinatari_display }} ({{ num_destinatari }} soci)</td></tr>
+        <tr><td><strong>Stato:</strong></td><td>{{ newsletter.get_stato_display }}</td></tr>
+    </table>
+
+    <h2>Contenuto email</h2>
+    <div style="border:1px solid #ddd; padding:20px; background:#fff; margin-bottom:20px;">
+        {{ newsletter.corpo|safe }}
+    </div>
+
+    <h2>Lista destinatari ({{ num_destinatari }})</h2>
+    <ul>
+        {% for socio in destinatari %}
+        <li>{{ socio.nome }} {{ socio.cognome }} — {{ socio.email }}</li>
+        {% empty %}
+        <li>Nessun destinatario con consenso marketing.</li>
+        {% endfor %}
+    </ul>
+
+    <div style="margin-top:20px;">
+        <a href="{% url 'admin:reports_newsletter_change' newsletter.pk %}" class="button">← Torna alla modifica</a>
+    </div>
+</div>
+{% endblock %}

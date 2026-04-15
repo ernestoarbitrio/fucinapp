@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -43,7 +44,13 @@ def bulk_renew(request):
     data_scadenza = get_data_scadenza_default(anno_corrente)
 
     if request.method == "POST":
-        importo = request.POST.get("importo", 5)
+        try:
+            importo = Decimal(request.POST.get("importo", "5"))
+            if importo <= 0:
+                raise ValueError
+        except (InvalidOperation, ValueError):
+            messages.error(request, "Importo non valido.")
+            return redirect("/admin/anagrafica/socio/")
         stato = request.POST.get("stato", "in_attesa")
         creati = 0
 
@@ -82,23 +89,44 @@ def bulk_renew(request):
 @staff_member_required
 def dashboard(request):
     from django.contrib.admin import site as admin_site
+    from django.db.models import Exists, Max, OuterRef
 
     today = timezone.now().date()
     in_30_days = today + datetime.timedelta(days=30)
-    all_soci = Socio.objects.prefetch_related("quote").all()
 
-    in_regola, scaduti, senza_quota = [], [], []
-    for s in all_soci:
-        if s.is_in_regola:
-            in_regola.append(s)
-        elif s.ultima_quota and s.ultima_quota.data_scadenza is not None:
-            # Only count as scaduto if has a quota with a real expiry date
-            scaduti.append(s)
-        elif not s.ultima_quota:
-            senza_quota.append(s)
-        # else: has quota but data_scadenza is null — excluded from all counts
+    all_soci = Socio.objects.all()
+    totale = all_soci.count()
 
-    scaduti.sort(key=lambda s: s.ultima_quota.data_scadenza)
+    # Subquery: socio has an active paid quota covering today
+    active_quota = Quota.objects.filter(
+        socio=OuterRef("pk"),
+        stato="pagata",
+        data_inizio__lte=today,
+        data_scadenza__gte=today,
+    )
+    has_any_quota = Quota.objects.filter(socio=OuterRef("pk"))
+
+    annotated = all_soci.annotate(
+        _in_regola=Exists(active_quota),
+        _has_quota=Exists(has_any_quota),
+        _ultima_scadenza=Max("quote__data_scadenza"),
+    )
+
+    in_regola_count = annotated.filter(_in_regola=True).count()
+
+    # Scaduti: not in regola, has quota, has a real scadenza date
+    soci_scaduti = list(
+        annotated.filter(
+            _in_regola=False,
+            _has_quota=True,
+            _ultima_scadenza__isnull=False,
+        )
+        .prefetch_related("quote")
+        .order_by("_ultima_scadenza")
+    )
+
+    # Senza quota: no quota at all
+    soci_senza_quota = list(annotated.filter(_has_quota=False))
 
     quote_in_scadenza = (
         Quota.objects.filter(
@@ -110,21 +138,20 @@ def dashboard(request):
         .select_related("socio")
         .order_by("data_scadenza")
     )
-
     for q in quote_in_scadenza:
         q.giorni_rimasti = (q.data_scadenza - today).days
 
     context = {
         **admin_site.each_context(request),
         "title": "Dashboard completa",
-        "totale": all_soci.count(),
-        "in_regola": len(in_regola),
-        "scaduti": len(scaduti),
-        "nessuna_quota": len(senza_quota),
-        "soci_senza_quota": senza_quota,
+        "totale": totale,
+        "in_regola": in_regola_count,
+        "scaduti": len(soci_scaduti),
+        "nessuna_quota": len(soci_senza_quota),
+        "soci_senza_quota": soci_senza_quota,
         "in_scadenza": quote_in_scadenza.count(),
         "quote_in_scadenza": quote_in_scadenza,
-        "soci_scaduti": scaduti,
+        "soci_scaduti": soci_scaduti,
     }
     return render(request, "admin/anagrafica/dashboard.html", context)
 

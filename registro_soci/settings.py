@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "configurazione",
     "reports",
     "django_apscheduler",
+    "tinymce",
 ]
 
 MIDDLEWARE = [
