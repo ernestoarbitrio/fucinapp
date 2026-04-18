@@ -68,6 +68,28 @@
                 {{ form.codice_fiscale }}
                 {{ form.codice_fiscale.errors }}
                 <div class="cf-hint" id="cf-hint"></div>
+                {{ form.senza_cf }}
+                <label style="margin-top:8px; display:flex; align-items:center; gap:6px; font-size:0.9rem; cursor:pointer;">
+                    <input type="checkbox" id="no-cf-toggle"> Non ho il codice fiscale
+                </label>
+            </div>
+
+            <div id="documento-section" style="display:none;">
+                <div style="background:#e3f2fd; border:1px solid #90caf9; border-radius:8px; padding:12px 16px; margin-bottom:18px;">
+                    <strong>📄 Documento di identità</strong> — Inserisci un documento alternativo.
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_tipo_documento">Tipo documento</label>
+                        {{ form.tipo_documento }}
+                        {{ form.tipo_documento.errors }}
+                    </div>
+                    <div class="form-group">
+                        <label for="id_numero_documento">Numero documento</label>
+                        {{ form.numero_documento }}
+                        {{ form.numero_documento.errors }}
+                    </div>
+                </div>
             </div>
 
             <div class="form-group">
@@ -284,6 +306,33 @@
 
     // On page load check in case of form re-render after error
     document.addEventListener("DOMContentLoaded", checkEta);
+    </script>
+
+    <script>
+    (function() {
+        const toggle = document.getElementById("no-cf-toggle");
+        const hiddenField = document.getElementById("id_senza_cf");
+        const cfField = document.getElementById("id_codice_fiscale");
+        const cfHint = document.getElementById("cf-hint");
+        const docSection = document.getElementById("documento-section");
+
+        function updateVisibility() {
+            const noCf = toggle.checked;
+            hiddenField.value = noCf ? "True" : "";
+            cfField.disabled = noCf;
+            cfField.style.opacity = noCf ? "0.4" : "1";
+            if (noCf) { cfField.value = ""; cfHint.textContent = ""; }
+            docSection.style.display = noCf ? "block" : "none";
+        }
+
+        // Restore state on re-render from hidden field value
+        if (hiddenField.value === "True") {
+            toggle.checked = true;
+        }
+
+        toggle.addEventListener("change", updateVisibility);
+        updateVisibility();
+    })();
     </script>
 </body>
 

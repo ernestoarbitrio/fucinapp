@@ -152,6 +152,8 @@ class SocioResource(resources.ModelResource):
             "cognome",
             "nome",
             "codice_fiscale",
+            "tipo_documento",
+            "numero_documento",
             "email",
             "data_nascita",
             "luogo_nascita",
@@ -170,6 +172,8 @@ class SocioResource(resources.ModelResource):
             "cognome",
             "nome",
             "codice_fiscale",
+            "tipo_documento",
+            "numero_documento",
             "email",
             "data_nascita",
             "luogo_nascita",
@@ -228,7 +232,9 @@ class SocioAdminForm(forms.ModelForm):
         js = ("anagrafica/comune_select.js",)
 
     def clean_codice_fiscale(self):
-        cf = self.cleaned_data.get("codice_fiscale", "").upper().strip()
+        cf = (self.cleaned_data.get("codice_fiscale") or "").upper().strip()
+        if not cf:
+            return ""
 
         try:
             valida_codice_fiscale(cf)
@@ -350,6 +356,8 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
                     "data_nascita",
                     "luogo_nascita",
                     "codice_fiscale",
+                    "tipo_documento",
+                    "numero_documento",
                     "tipo",
                 )
             },

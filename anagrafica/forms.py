@@ -1,6 +1,6 @@
 from django import forms
 
-from anagrafica.models import Socio, valida_codice_fiscale
+from anagrafica.models import TIPO_DOCUMENTO_CHOICES, Socio, valida_codice_fiscale
 
 PROVINCE_ITALIANE = [
     ("AG", "Agrigento"),
@@ -125,6 +125,14 @@ class IscrizioneForm(forms.ModelForm):
         label="Comune",
     )
 
+    tipo_documento = forms.ChoiceField(
+        choices=[("", "— Seleziona tipo documento —")] + list(TIPO_DOCUMENTO_CHOICES),
+        required=False,
+        label="Tipo documento",
+    )
+
+    senza_cf = forms.BooleanField(required=False, widget=forms.HiddenInput())
+
     class Meta:
         model = Socio
         fields = (
@@ -133,6 +141,8 @@ class IscrizioneForm(forms.ModelForm):
             "data_nascita",
             "luogo_nascita",
             "codice_fiscale",
+            "tipo_documento",
+            "numero_documento",
             "via",
             "comune",
             "provincia",
@@ -152,8 +162,15 @@ class IscrizioneForm(forms.ModelForm):
             "data_nascita": forms.DateInput(attrs={"type": "date"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["codice_fiscale"].required = False
+        self.fields["numero_documento"].required = False
+
     def clean_codice_fiscale(self):
-        cf = self.cleaned_data.get("codice_fiscale", "").upper().strip()
+        cf = (self.cleaned_data.get("codice_fiscale") or "").upper().strip()
+        if not cf:
+            return ""
         valida_codice_fiscale(cf)
         from anagrafica.cf_utils import calcola_carattere_controllo
 
@@ -166,6 +183,26 @@ class IscrizioneForm(forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
+        senza_cf = cleaned_data.get("senza_cf", False)
+
+        if senza_cf:
+            tipo_doc = (cleaned_data.get("tipo_documento") or "").strip()
+            num_doc = (cleaned_data.get("numero_documento") or "").strip()
+            if not tipo_doc:
+                self.add_error(
+                    "tipo_documento",
+                    "Seleziona un tipo di documento se non hai il codice fiscale.",
+                )
+            if not num_doc:
+                self.add_error(
+                    "numero_documento",
+                    "Inserisci il numero del documento se non hai il codice fiscale.",
+                )
+        else:
+            cf = (cleaned_data.get("codice_fiscale") or "").strip()
+            if not cf:
+                self.add_error("codice_fiscale", "Questo campo è obbligatorio.")
+
         data_nascita = cleaned_data.get("data_nascita")
         if data_nascita:
             from datetime import date

@@ -49,10 +49,17 @@
                 <span class="key">Luogo di nascita</span>
                 <span class="val">{{ data.luogo_nascita }}</span>
             </div>
+            {% if data.codice_fiscale %}
             <div class="summary-row">
                 <span class="key">Codice Fiscale</span>
                 <span class="val">{{ data.codice_fiscale }}</span>
             </div>
+            {% else %}
+            <div class="summary-row">
+                <span class="key">Documento</span>
+                <span class="val">{{ data.tipo_documento_display }} — n. {{ data.numero_documento }}</span>
+            </div>
+            {% endif %}
             <div class="summary-row">
                 <span class="key">Via/Piazza</span>
                 <span class="val">{{ data.via }}</span>

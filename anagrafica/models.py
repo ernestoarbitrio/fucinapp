@@ -22,6 +22,12 @@ TIPO_CHOICES = [
     ("TE", "Tesoriere"),
 ]
 
+TIPO_DOCUMENTO_CHOICES = [
+    ("passaporto", "Passaporto"),
+    ("carta_identita", "Carta di identità"),
+    ("patente", "Patente di guida"),
+]
+
 
 def get_data_scadenza_default(anno):
     from configurazione.models import ConfigurazioneAnnuale
@@ -51,7 +57,22 @@ class Socio(models.Model):
         verbose_name="Codice Fiscale",
         max_length=16,
         unique=True,
+        blank=True,
+        null=True,
         validators=[valida_codice_fiscale],
+    )
+    tipo_documento = models.CharField(
+        verbose_name="Tipo documento",
+        max_length=20,
+        choices=TIPO_DOCUMENTO_CHOICES,
+        blank=True,
+        null=True,
+    )
+    numero_documento = models.CharField(
+        verbose_name="Numero documento",
+        max_length=30,
+        blank=True,
+        null=True,
     )
     via = models.CharField(verbose_name="Via/Piazza", max_length=200)
     comune = models.CharField(verbose_name="Comune", max_length=100)
@@ -187,7 +208,7 @@ class Socio(models.Model):
         img.save(buffer, format="PNG")
         buffer.seek(0)
 
-        filename = f"qr_{self.codice_fiscale}.png"
+        filename = f"qr_{self.codice_fiscale or self.pk}.png"
         self.qr_code.save(filename, ContentFile(buffer.read()), save=False)
 
     def save(self, *args, **kwargs):

@@ -57,7 +57,7 @@ class SocioPdfMixin:
             return FileResponse(
                 buffer,
                 as_attachment=False,
-                filename=f"iscrizione_{socio.codice_fiscale}_{quota.anno}.pdf",
+                filename=f"iscrizione_{socio.codice_fiscale or socio.pk}_{quota.anno}.pdf",
                 content_type="application/pdf",
             )
         except Exception as e:
@@ -74,7 +74,7 @@ class SocioPdfMixin:
             return FileResponse(
                 buffer,
                 as_attachment=False,
-                filename=f"tessera_{socio.codice_fiscale}_{quota.anno}.pdf",
+                filename=f"tessera_{socio.codice_fiscale or socio.pk}_{quota.anno}.pdf",
                 content_type="application/pdf",
             )
         except Exception as e:

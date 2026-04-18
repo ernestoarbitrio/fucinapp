@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from anagrafica.email_utils import invia_email_iscrizione
 from anagrafica.forms import IscrizioneForm
-from anagrafica.models import Quota, Socio
+from anagrafica.models import Quota, Socio, TIPO_DOCUMENTO_CHOICES
 
 
 def verifica_socio(request, token):
@@ -232,6 +232,9 @@ def iscrizione(request):
         if form.is_valid():
             data = form.cleaned_data.copy()
             data["data_nascita"] = form.cleaned_data["data_nascita"].isoformat()
+            data["tipo_documento_display"] = dict(TIPO_DOCUMENTO_CHOICES).get(
+                data.get("tipo_documento", ""), ""
+            )
             request.session["iscrizione_data"] = data
             return redirect("anagrafica:iscrizione_riepilogo")
     else:

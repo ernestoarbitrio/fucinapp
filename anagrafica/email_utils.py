@@ -42,7 +42,7 @@ def invia_email_iscrizione(socio, quota):
 
     <table>
         <tr><td>Nome e Cognome</td><td>{socio.nome_completo}</td></tr>
-        <tr><td>Codice Fiscale</td><td>{socio.codice_fiscale}</td></tr>
+        <tr><td>Codice Fiscale</td><td>{socio.codice_fiscale or f"{socio.get_tipo_documento_display()} n. {socio.numero_documento}"}</td></tr>
         <tr><td>Email</td><td>{socio.email}</td></tr>
         <tr><td>N° Tessera</td><td>{quota.pk}</td></tr>
         <tr><td>Anno</td><td>{quota.anno}</td></tr>
