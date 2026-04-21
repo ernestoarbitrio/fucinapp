@@ -176,6 +176,48 @@
         border-top: 1px solid var(--border-color);
         margin: 0 0 28px;
     }
+
+    @media (max-width: 767px) {
+        .app-list {
+            width: 100% !important;
+        }
+
+        .dashboard #content {
+            width: 100%;
+        }
+
+        #nav-sidebar {
+            display: block;
+            width: 100%;
+            position: static;
+            margin-bottom: 16px;
+        }
+
+        #container {
+            padding-left: 0 !important;
+        }
+
+        .main.shifted {
+            padding-left: 0 !important;
+        }
+
+        .stat-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .dash-tables {
+            grid-template-columns: 1fr;
+        }
+
+        .dash-table td, .dash-table th {
+            font-size: 0.75rem;
+            padding: 8px 6px;
+        }
+
+        #toggle-nav-sidebar {
+            display: none;
+        }
+    }
 </style>
 
 <!-- Django default app list + recent actions -->

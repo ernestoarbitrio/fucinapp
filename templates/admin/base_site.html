@@ -8,6 +8,113 @@
 
 {% block extrahead %}
 {{ block.super }}
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+    @media (max-width: 767px) {
+        /* Layout */
+        #container, .main, .main.shifted {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+        #header {
+            padding: 8px 12px;
+        }
+        #branding h1 {
+            font-size: 1.1rem;
+        }
+        #user-tools {
+            font-size: 0.8rem;
+        }
+        #content {
+            padding: 10px !important;
+            max-width: 100vw;
+            box-sizing: border-box;
+        }
+
+        /* Sidebar */
+        #nav-sidebar {
+            display: block;
+            width: 100%;
+            position: static;
+            height: auto;
+            overflow: visible;
+            margin-bottom: 16px;
+        }
+        #toggle-nav-sidebar {
+            display: none;
+        }
+
+        /* App list on index */
+        .app-list, #content-related {
+            width: 100% !important;
+            float: none !important;
+            margin: 0 0 16px !important;
+        }
+
+        /* Tables: horizontal scroll */
+        #content-main, .results, #changelist {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .results table, #result_list {
+            min-width: 600px;
+        }
+
+        /* Forms */
+        .form-row, fieldset .form-row {
+            display: block !important;
+        }
+        .form-row input, .form-row select, .form-row textarea,
+        fieldset input, fieldset select, fieldset textarea {
+            max-width: 100% !important;
+            box-sizing: border-box;
+        }
+        .fieldBox, .field-box {
+            width: 100% !important;
+        }
+
+        /* Inline stacked */
+        .inline-group .tabular td, .inline-group .tabular th {
+            font-size: 0.8rem;
+            padding: 6px 4px;
+        }
+
+        /* Action bar */
+        .actions {
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .actions select {
+            max-width: 60vw;
+        }
+
+        /* Breadcrumbs */
+        .breadcrumbs {
+            font-size: 0.8rem;
+            padding: 6px 12px;
+        }
+
+        /* Object tools (add/edit buttons) */
+        .object-tools {
+            float: none !important;
+            padding: 0 0 8px;
+        }
+        .object-tools li {
+            margin-left: 0;
+            margin-right: 8px;
+        }
+
+        /* Change list filters */
+        #changelist-filter {
+            width: 100% !important;
+            float: none !important;
+            margin: 0 0 16px;
+        }
+        #changelist #changelist-filter + .results {
+            margin-right: 0 !important;
+        }
+    }
+</style>
 <script>
     document.addEventListener("DOMContentLoaded", function () {
     const sidebar = document.getElementById("nav-sidebar");
