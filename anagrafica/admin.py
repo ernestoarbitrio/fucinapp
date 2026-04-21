@@ -331,7 +331,6 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
         "email",
         "stato_quota_badge",
         "approvato_badge",
-        "qr_code_stato",
         "qr_code_preview",
     )
     list_display_links = ("cognome", "nome")
@@ -443,39 +442,6 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
         return mark_safe(
             '<span style="color:orange; font-weight:bold;">⚠️ Nessuna quota</span>'
         )
-
-    @admin.display(description="Stato QR")
-    def qr_code_stato(self, obj):
-        if not obj.qr_code:
-            return mark_safe('<span style="color:#aaa;">—</span>')
-        try:
-            expected = obj.get_verifica_url()
-            stored = obj.qr_code.read()
-            obj.qr_code.seek(0)
-            # Generate expected QR in memory
-            import io
-
-            import qrcode
-
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_H,
-                box_size=10,
-                border=4,
-            )
-            qr.add_data(expected)
-            qr.make(fit=True)
-            buf = io.BytesIO()
-            qr.make_image(fill_color="black", back_color="white").save(
-                buf, format="PNG"
-            )
-            if stored == buf.getvalue():
-                return mark_safe('<span style="color:green;">✅</span>')
-            return mark_safe(
-                '<span style="color:red; font-weight:bold;">❌ URL errato</span>'
-            )
-        except Exception:
-            return mark_safe('<span style="color:orange;">⚠️</span>')
 
     @admin.display(description="QR Code")
     def qr_code_preview(self, obj):
