@@ -192,7 +192,7 @@ class Socio(models.Model):
         return f"{base_url}{path}"
 
     def genera_qr_code(self, request=None):
-        url = self.get_verifica_url(request)
+        url = self.get_verifica_url()
 
         qr = qrcode.QRCode(
             version=1,
