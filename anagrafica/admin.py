@@ -331,6 +331,7 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
         "email",
         "stato_quota_badge",
         "approvato_badge",
+        "qr_code_stato",
         "qr_code_preview",
     )
     list_display_links = ("cognome", "nome")
@@ -339,7 +340,7 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at", "qr_code_preview", "firma_preview")
     ordering = ("cognome", "nome")
     inlines = [QuotaInline]
-    actions = ["approva_soci", "rifiuta_soci", "bulk_renew"]
+    actions = ["approva_soci", "rifiuta_soci", "bulk_renew", "rigenera_qr_codes"]
     resource_classes = [SocioResource]
     formats = [XLSX]
 
@@ -443,6 +444,39 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
             '<span style="color:orange; font-weight:bold;">⚠️ Nessuna quota</span>'
         )
 
+    @admin.display(description="Stato QR")
+    def qr_code_stato(self, obj):
+        if not obj.qr_code:
+            return mark_safe('<span style="color:#aaa;">—</span>')
+        try:
+            expected = obj.get_verifica_url()
+            stored = obj.qr_code.read()
+            obj.qr_code.seek(0)
+            # Generate expected QR in memory
+            import io
+
+            import qrcode
+
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(expected)
+            qr.make(fit=True)
+            buf = io.BytesIO()
+            qr.make_image(fill_color="black", back_color="white").save(
+                buf, format="PNG"
+            )
+            if stored == buf.getvalue():
+                return mark_safe('<span style="color:green;">✅</span>')
+            return mark_safe(
+                '<span style="color:red; font-weight:bold;">❌ URL errato</span>'
+            )
+        except Exception:
+            return mark_safe('<span style="color:orange;">⚠️</span>')
+
     @admin.display(description="QR Code")
     def qr_code_preview(self, obj):
         if obj.qr_code:
@@ -507,6 +541,15 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
     def rifiuta_soci(self, request, queryset):
         updated = queryset.update(approvato=False)
         self.message_user(request, f"❌ {updated} soci rifiutati.")
+
+    @admin.action(description="🔄 Rigenera QR code per i soci selezionati")
+    def rigenera_qr_codes(self, request, queryset):
+        count = 0
+        for socio in queryset:
+            socio.genera_qr_code(request=request)
+            socio.save(update_fields=["qr_code"])
+            count += 1
+        self.message_user(request, f"🔄 QR code rigenerati per {count} soci.")
 
 
 @admin.register(Quota)

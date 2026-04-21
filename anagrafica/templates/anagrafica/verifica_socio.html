@@ -12,7 +12,13 @@
         {% if in_regola %}
             <div class="status green">✅ Socio in regola</div>
         {% elif ultima_quota %}
-            <div class="status red">❌ Quota scaduta</div>
+            {% if ultima_quota.stato == "in_attesa" %}
+                <div class="status orange">⏳ Quota in attesa di pagamento</div>
+            {% elif ultima_quota.stato == "annullata" %}
+                <div class="status red">❌ Quota annullata</div>
+            {% else %}
+                <div class="status red">❌ Quota scaduta</div>
+            {% endif %}
         {% else %}
             <div class="status orange">⚠️ Nessuna quota registrata</div>
         {% endif %}
@@ -50,7 +56,13 @@
         {% elif ultima_quota %}
             <div class="row">
                 <span class="label">Ultima quota</span>
-                <span class="badge badge-red">Scaduta il {{ ultima_quota.data_scadenza|date:"d/m/Y" }}</span>
+                {% if ultima_quota.stato == "in_attesa" %}
+                    <span class="badge badge-orange">In attesa di pagamento</span>
+                {% elif ultima_quota.stato == "annullata" %}
+                    <span class="badge badge-red">Annullata</span>
+                {% else %}
+                    <span class="badge badge-red">Scaduta il {{ ultima_quota.data_scadenza|date:"d/m/Y" }}</span>
+                {% endif %}
             </div>
             <div class="row">
                 <span class="label">Anno</span>

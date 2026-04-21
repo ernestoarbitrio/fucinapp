@@ -507,6 +507,14 @@ class VerificaSocioViewTests(TestCase):
         response = self.client.get(self._url())
         self.assertTemplateUsed(response, "anagrafica/verifica_socio.html")
 
+    def test_in_attesa_quota_shows_correct_state(self):
+        self.socio.quote.all().delete()
+        make_quota(self.socio, stato="in_attesa", data_pagamento=None)
+        response = self.client.get(self._url())
+        self.assertFalse(response.context["in_regola"])
+        self.assertContains(response, "In attesa di pagamento")
+        self.assertNotContains(response, "Quota scaduta")
+
 
 # ── Dashboard View ────────────────────────────────────────────────────────────
 
@@ -1043,3 +1051,23 @@ class IscrizioneRiepilogoViewTests(TestCase):
             {"consenso_trattamento": "True", "firma": "data:image/png;base64,abc"},
         )
         self.assertRedirects(response, "/anagrafica/iscrizione/")
+
+
+# ── Rigenera QR Codes Action ──────────────────────────────────────────────────
+
+
+class RigeneraQrCodesActionTests(AdminTestMixin, TestCase):
+    def test_rigenera_qr_codes(self):
+        socio = make_socio()
+        socio.genera_qr_code()
+        socio.save(update_fields=["qr_code"])
+
+        response = self.client.post(
+            "/admin/anagrafica/socio/",
+            {"action": "rigenera_qr_codes", "_selected_action": [socio.pk]},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        socio.refresh_from_db()
+        self.assertTrue(socio.qr_code)
+        self.assertIn("1 soci", str(list(response.context["messages"])[0]))
