@@ -542,14 +542,30 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
         updated = queryset.update(approvato=False)
         self.message_user(request, f"❌ {updated} soci rifiutati.")
 
-    @admin.action(description="🔄 Rigenera QR code per i soci selezionati")
+    @admin.action(
+        description="🔄 Rigenera QR code e invia tessera per i soci selezionati"
+    )
     def rigenera_qr_codes(self, request, queryset):
-        count = 0
+        from anagrafica.email_utils import invia_tessera
+
+        rigenerati = 0
+        email_inviate = 0
+        errori = []
         for socio in queryset:
             socio.genera_qr_code(request=request)
             socio.save(update_fields=["qr_code"])
-            count += 1
-        self.message_user(request, f"🔄 QR code rigenerati per {count} soci.")
+            rigenerati += 1
+            quota = socio.quota_attiva or socio.ultima_quota
+            if quota and socio.email:
+                try:
+                    invia_tessera(socio, quota, motivo="aggiornamento_qr")
+                    email_inviate += 1
+                except Exception:
+                    errori.append(socio.nome_completo)
+        msg = f"🔄 QR rigenerati: {rigenerati}. 📧 Tessere inviate: {email_inviate}."
+        if errori:
+            msg += f" ⚠️ Errori invio: {', '.join(errori)}."
+        self.message_user(request, msg)
 
 
 @admin.register(Quota)

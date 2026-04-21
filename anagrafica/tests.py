@@ -1070,4 +1070,22 @@ class RigeneraQrCodesActionTests(AdminTestMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         socio.refresh_from_db()
         self.assertTrue(socio.qr_code)
-        self.assertIn("1 soci", str(list(response.context["messages"])[0]))
+        msg = str(list(response.context["messages"])[0])
+        self.assertIn("QR rigenerati: 1", msg)
+
+    @patch("anagrafica.email_utils.invia_tessera")
+    def test_rigenera_sends_tessera_email(self, mock_invia):
+        socio = make_socio()
+        make_quota(socio)
+        socio.genera_qr_code()
+        socio.save(update_fields=["qr_code"])
+
+        response = self.client.post(
+            "/admin/anagrafica/socio/",
+            {"action": "rigenera_qr_codes", "_selected_action": [socio.pk]},
+            follow=True,
+        )
+        mock_invia.assert_called_once()
+        self.assertEqual(mock_invia.call_args.kwargs["motivo"], "aggiornamento_qr")
+        msg = str(list(response.context["messages"])[0])
+        self.assertIn("Tessere inviate: 1", msg)

@@ -81,11 +81,29 @@ def invia_email_iscrizione(socio, quota):
         logger.exception("Errore invio email iscrizione a %s", socio.email)
 
 
-def invia_tessera(socio, quota):
+def invia_tessera(socio, quota, motivo=None):
     try:
         config = Configurazione.get()
         resend.api_key = settings.RESEND_API_KEY
-        subject = f"Invio tessera associativa — {config.nome_associazione}"
+        if motivo == "aggiornamento_qr":
+            subject = f"Tessera associativa aggiornata — {config.nome_associazione}"
+            corpo = (
+                f"<h1>Ciao, {socio.nome}!</h1>"
+                "<p>Ti informiamo che abbiamo aggiornato la tua <strong>tessera associativa</strong> "
+                "con un nuovo QR code.</p>"
+                "<p>Ci scusiamo per il disagio: la tessera inviata in precedenza conteneva un "
+                "QR code non funzionante. In allegato trovi la versione corretta.</p>"
+                "<p>Ti chiediamo di <strong>sostituire la vecchia tessera</strong> con quella allegata.</p>"
+                "<p>Grazie per la comprensione! 🙏</p>"
+            )
+        else:
+            subject = f"Invio tessera associativa — {config.nome_associazione}"
+            corpo = (
+                f"<h1>Ciao, {socio.nome}! 🎉</h1>"
+                "<p>Come da tua richiesta ti inviamo la tua <strong>tessera associativa</strong>.</p>"
+                "<p>Controlla il PDF in allegato 😎.</p>"
+                "<p>👋</p>"
+            )
         html_body = f"""
 <!DOCTYPE html>
 <html>
@@ -106,12 +124,7 @@ def invia_tessera(socio, quota):
 </head>
 <body>
 <div class="card">
-    <h1>Ciao, {socio.nome}! 🎉</h1>
-    <p>Come da tua richiesta ti inviamo la tua <strong>tessera associativa</strong>.</p>
-
-    <p>Controlla il PDF in allegato 😎.</p>
-
-    <p>👋</p>
+    {corpo}
     <div class="footer">
         {config.nome_associazione} · {config.via}, {config.cap} {config.comune}<br>
         {config.email}
