@@ -24,20 +24,19 @@ def get_dashboard_stats():
     in_30_days = today + datetime.timedelta(days=30)
     all_soci = Socio.objects.prefetch_related("quote").all()
 
-    in_regola, scaduti, senza_quota = [], [], []
+    in_regola, scaduti, incomplete, senza_quota = [], [], [], []
     for s in all_soci:
         if s.is_in_regola:
             in_regola.append(s)
         elif s.ultima_quota:
-            scaduti.append(s)
+            # Has a quota but not in regola — check if pending
+            if s.ultima_quota.stato == "in_attesa":
+                incomplete.append(s)
+            elif s.ultima_quota.data_scadenza is not None:
+                scaduti.append(s)
         else:
             senza_quota.append(s)
 
-    scaduti = [
-        s
-        for s in scaduti
-        if s.ultima_quota and s.ultima_quota.data_scadenza is not None
-    ]
     scaduti.sort(key=lambda s: s.ultima_quota.data_scadenza or datetime.date.min)
 
     quote_in_scadenza = (
@@ -57,8 +56,10 @@ def get_dashboard_stats():
         "totale": all_soci.count(),
         "in_regola": len(in_regola),
         "scaduti": len(scaduti),
+        "incomplete": len(incomplete),
         "nessuna_quota": len(senza_quota),
         "in_scadenza": quote_in_scadenza.count(),
         "quote_in_scadenza": quote_in_scadenza,
         "soci_scaduti": scaduti[:10],
+        "soci_incomplete": incomplete[:10],
     }

@@ -556,6 +556,19 @@ class DashboardViewTests(AdminTestMixin, TestCase):
         response = self.client.get("/anagrafica/dashboard/")
         self.assertEqual(response.context["scaduti"], 1)
 
+    def test_incomplete_count(self):
+        make_socio()
+        # make_socio auto-creates an in_attesa quota via signal
+        response = self.client.get("/anagrafica/dashboard/")
+        self.assertEqual(response.context["incomplete"], 1)
+
+    def test_incomplete_not_in_scaduti(self):
+        make_socio()
+        # Has in_attesa quota → should be incomplete, not scaduti
+        response = self.client.get("/anagrafica/dashboard/")
+        self.assertEqual(response.context["incomplete"], 1)
+        self.assertEqual(response.context["scaduti"], 0)
+
     def test_senza_quota_count(self):
         s = make_socio()
         s.quote.all().delete()
@@ -592,6 +605,7 @@ class DashboardViewTests(AdminTestMixin, TestCase):
         # Has a quota but data_scadenza is null → not in_regola, not scaduti, not senza_quota
         self.assertEqual(response.context["in_regola"], 0)
         self.assertEqual(response.context["scaduti"], 0)
+        self.assertEqual(response.context["incomplete"], 0)
         self.assertEqual(response.context["nessuna_quota"], 0)
 
     def test_empty_dashboard(self):
@@ -599,6 +613,7 @@ class DashboardViewTests(AdminTestMixin, TestCase):
         self.assertEqual(response.context["totale"], 0)
         self.assertEqual(response.context["in_regola"], 0)
         self.assertEqual(response.context["scaduti"], 0)
+        self.assertEqual(response.context["incomplete"], 0)
         self.assertEqual(response.context["nessuna_quota"], 0)
         self.assertEqual(response.context["in_scadenza"], 0)
 

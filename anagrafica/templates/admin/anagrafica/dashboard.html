@@ -18,7 +18,7 @@
 <style>
     .stat-grid {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(6, 1fr);
         gap: 12px;
         margin-bottom: 32px;
     }
@@ -36,6 +36,7 @@
     .card-green  { border-top-color: #43a047; } .card-green  .number { color: #43a047; }
     .card-red    { border-top-color: #e53935; } .card-red    .number { color: #e53935; }
     .card-orange { border-top-color: #f0a500; } .card-orange .number { color: #f0a500; }
+    .card-yellow { border-top-color: #fbc02d; } .card-yellow .number { color: #fbc02d; }
 
     /* Tabs */
     .dash-tabs {
@@ -183,6 +184,10 @@
         <div class="number">{{ scaduti }}</div>
         <div class="label">Quota scaduta</div>
     </div>
+    <div class="stat-card card-yellow">
+        <div class="number">{{ incomplete }}</div>
+        <div class="label">Quote incomplete</div>
+    </div>
     <div class="stat-card card-orange">
         <div class="number">{{ nessuna_quota }}</div>
         <div class="label">Nessuna quota</div>
@@ -202,6 +207,10 @@
     <button class="dash-tab" data-tab="scaduta">
         ❌ Quota scaduta
         <span class="tab-count">{{ scaduti }}</span>
+    </button>
+    <button class="dash-tab" data-tab="incomplete">
+        ⏳ Quote incomplete
+        <span class="tab-count">{{ incomplete }}</span>
     </button>
     <button class="dash-tab" data-tab="senza">
         🚫 Senza quota
@@ -271,6 +280,32 @@
     </table>
 </div>
 
+<!-- Tab: Quote incomplete -->
+<div class="dash-panel" id="panel-incomplete">
+    <table id="table-incomplete">
+        <thead>
+            <tr>
+                <th>Socio</th>
+                <th>Email</th>
+                <th>Anno</th>
+                <th>Stato</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for socio in soci_incomplete %}
+            <tr>
+                <td><a href="{% url 'admin:anagrafica_socio_change' socio.pk %}">{{ socio }}</a></td>
+                <td>{{ socio.email }}</td>
+                <td>{{ socio.ultima_quota.anno }}</td>
+                <td><span class="dash-badge badge-orange">In attesa di pagamento</span></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" style="text-align:center; color:var(--body-quiet-color); padding:16px;">✅ Nessuna quota incompleta.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 <!-- Tab: Senza quota -->
 <div class="dash-panel" id="panel-senza">
     <table id="table-senza">
@@ -316,6 +351,8 @@ $(document).ready(function () {
         $("#table-scadenza").DataTable({ language: lang, pageLength: 10, order: [[3, "asc"]] });
     if (!$("#table-scaduta tbody tr td[colspan]").length)
         $("#table-scaduta").DataTable({ language: lang, pageLength: 10, order: [[3, "asc"]] });
+    if (!$("#table-incomplete tbody tr td[colspan]").length)
+        $("#table-incomplete").DataTable({ language: lang, pageLength: 10, order: [[0, "asc"]] });
     if ($("#table-senza tbody tr").length)
         $("#table-senza").DataTable({ language: lang, pageLength: 10, order: [[0, "asc"]] });
 
@@ -330,9 +367,8 @@ $(document).ready(function () {
         $("#panel-" + tab).addClass("active");
 
         // Redraw DataTable when tab becomes visible
-        if (tab === "scadenza") dt1.columns.adjust().draw(false);
-        if (tab === "scaduta")  dt2.columns.adjust().draw(false);
-        if (tab === "senza")    dt3.columns.adjust().draw(false);
+        var table = $("#panel-" + tab).find("table").DataTable();
+        if (table) table.columns.adjust().draw(false);
     });
 });
 </script>

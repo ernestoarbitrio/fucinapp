@@ -114,15 +114,30 @@ def dashboard(request):
 
     in_regola_count = annotated.filter(_in_regola=True).count()
 
-    # Scaduti: not in regola, has quota, has a real scadenza date
+    # Pending quota: in_attesa payment
+    pending_quota = Quota.objects.filter(
+        socio=OuterRef("pk"),
+        stato="in_attesa",
+    )
+    annotated = annotated.annotate(_has_pending=Exists(pending_quota))
+
+    # Scaduti: not in regola, has quota, has a real scadenza date, NO pending
     soci_scaduti = list(
         annotated.filter(
             _in_regola=False,
             _has_quota=True,
+            _has_pending=False,
             _ultima_scadenza__isnull=False,
         )
         .prefetch_related("quote")
         .order_by("_ultima_scadenza")
+    )
+
+    # Incomplete: has a pending (in_attesa) quota
+    soci_incomplete = list(
+        annotated.filter(_has_pending=True, _in_regola=False)
+        .prefetch_related("quote")
+        .order_by("cognome", "nome")
     )
 
     # Senza quota: no quota at all
@@ -147,11 +162,13 @@ def dashboard(request):
         "totale": totale,
         "in_regola": in_regola_count,
         "scaduti": len(soci_scaduti),
+        "incomplete": len(soci_incomplete),
         "nessuna_quota": len(soci_senza_quota),
         "soci_senza_quota": soci_senza_quota,
         "in_scadenza": quote_in_scadenza.count(),
         "quote_in_scadenza": quote_in_scadenza,
         "soci_scaduti": soci_scaduti,
+        "soci_incomplete": soci_incomplete,
     }
     return render(request, "admin/anagrafica/dashboard.html", context)
 
