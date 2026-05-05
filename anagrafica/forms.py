@@ -170,7 +170,7 @@ class IscrizioneForm(forms.ModelForm):
     def clean_codice_fiscale(self):
         cf = (self.cleaned_data.get("codice_fiscale") or "").upper().strip()
         if not cf:
-            return ""
+            return None
         valida_codice_fiscale(cf)
         from anagrafica.cf_utils import calcola_carattere_controllo
 

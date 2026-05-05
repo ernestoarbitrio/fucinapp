@@ -370,6 +370,10 @@ $(document).ready(function () {
         var table = $("#panel-" + tab).find("table").DataTable();
         if (table) table.columns.adjust().draw(false);
     });
+
+    // Activate tab from URL hash (e.g. #incomplete)
+    var hash = window.location.hash.replace("#", "");
+    if (hash) $(".dash-tab[data-tab='" + hash + "']").trigger("click");
 });
 </script>
 {% endblock %}
