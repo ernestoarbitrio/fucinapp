@@ -74,10 +74,18 @@ class Socio(models.Model):
         blank=True,
         null=True,
     )
+    residente_estero = models.BooleanField(
+        verbose_name="Residente all'estero", default=False
+    )
+    nazione = models.CharField(
+        verbose_name="Nazione", max_length=100, blank=True, default=""
+    )
     via = models.CharField(verbose_name="Via/Piazza", max_length=200)
-    comune = models.CharField(verbose_name="Comune", max_length=100)
-    provincia = models.CharField(verbose_name="Provincia", max_length=2)
-    cap = models.CharField(verbose_name="CAP", max_length=5)
+    comune = models.CharField(verbose_name="Comune/Città", max_length=100)
+    provincia = models.CharField(
+        verbose_name="Provincia/Stato", max_length=100, blank=True, default=""
+    )
+    cap = models.CharField(verbose_name="CAP/Codice postale", max_length=10)
     email = models.EmailField(verbose_name="Email", unique=True)
     telefono = models.CharField(
         verbose_name="Telefono", max_length=20, blank=True, null=True

@@ -219,6 +219,7 @@ class SocioAdminForm(forms.ModelForm):
     provincia = forms.ChoiceField(
         choices=[("", "— Seleziona —")] + PROVINCE_ITALIANE,
         widget=forms.Select(attrs={"id": "id_provincia"}),
+        required=False,
     )
 
     class Meta:
@@ -230,6 +231,20 @@ class SocioAdminForm(forms.ModelForm):
 
     class Media:
         js = ("anagrafica/comune_select.js",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.residente_estero:
+            self.fields["provincia"] = forms.CharField(
+                max_length=100, required=False, label="Provincia/Stato"
+            )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if not cleaned_data.get("residente_estero"):
+            if not (cleaned_data.get("provincia") or "").strip():
+                self.add_error("provincia", "Seleziona la provincia.")
+        return cleaned_data
 
     def clean_codice_fiscale(self):
         cf = (self.cleaned_data.get("codice_fiscale") or "").upper().strip()
@@ -364,7 +379,18 @@ class SocioAdmin(SocioPdfMixin, ExportMixin, admin.ModelAdmin):
         ),
         (
             "Contatti",
-            {"fields": ("email", "telefono", "via", "comune", "cap", "provincia")},
+            {
+                "fields": (
+                    "email",
+                    "telefono",
+                    "residente_estero",
+                    "nazione",
+                    "via",
+                    "comune",
+                    "cap",
+                    "provincia",
+                )
+            },
         ),
         (
             "QR Code e Stato",

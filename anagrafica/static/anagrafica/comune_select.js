@@ -39,6 +39,38 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    // Toggle between Italian and foreign address
+    function toggleEstero() {
+        const cb = document.getElementById("id_residente_estero");
+        if (!cb) return;
+        const estero = cb.checked;
+        const italiaDiv = document.getElementById("indirizzo-italia");
+        const esteroDiv = document.getElementById("indirizzo-estero");
+        const nazioneDiv = document.getElementById("nazione-group");
+        const capInput = document.getElementById("id_cap");
+
+        if (italiaDiv) {
+            italiaDiv.style.display = estero ? "none" : "";
+            italiaDiv.querySelectorAll("select").forEach(el => el.disabled = estero);
+        }
+        if (esteroDiv) {
+            esteroDiv.style.display = estero ? "" : "none";
+            esteroDiv.querySelectorAll("input").forEach(el => el.disabled = !estero);
+        }
+        if (nazioneDiv) nazioneDiv.style.display = estero ? "" : "none";
+        if (capInput) {
+            capInput.readOnly = !estero;
+            capInput.style.background = estero ? "" : "#f5f5f5";
+            capInput.maxLength = estero ? 10 : 5;
+        }
+    }
+
+    const esteroCheckbox = document.getElementById("id_residente_estero");
+    if (esteroCheckbox) {
+        esteroCheckbox.addEventListener("change", toggleEstero);
+        toggleEstero();
+    }
+
     document.addEventListener("change", function (e) {
         if (e.target.id === "id_provincia") {
             const capInput = document.getElementById("id_cap");

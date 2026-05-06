@@ -118,10 +118,11 @@ class IscrizioneForm(forms.ModelForm):
         choices=[("", "— Seleziona provincia —")] + PROVINCE_ITALIANE,
         widget=forms.Select(attrs={"id": "id_provincia"}),
         label="Provincia",
+        required=False,
     )
 
     comune = forms.CharField(
-        widget=forms.Select(attrs={"id": "id_comune"}),
+        widget=forms.TextInput(attrs={"id": "id_comune"}),
         label="Comune",
     )
 
@@ -132,6 +133,7 @@ class IscrizioneForm(forms.ModelForm):
     )
 
     senza_cf = forms.BooleanField(required=False, widget=forms.HiddenInput())
+    residente_estero = forms.BooleanField(required=False, label="Residente all'estero")
 
     class Meta:
         model = Socio
@@ -143,6 +145,8 @@ class IscrizioneForm(forms.ModelForm):
             "codice_fiscale",
             "tipo_documento",
             "numero_documento",
+            "residente_estero",
+            "nazione",
             "via",
             "comune",
             "provincia",
@@ -166,6 +170,7 @@ class IscrizioneForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["codice_fiscale"].required = False
         self.fields["numero_documento"].required = False
+        self.fields["nazione"].required = False
 
     def clean_codice_fiscale(self):
         cf = (self.cleaned_data.get("codice_fiscale") or "").upper().strip()
@@ -184,6 +189,7 @@ class IscrizioneForm(forms.ModelForm):
     def clean(self):
         cleaned_data = super().clean()
         senza_cf = cleaned_data.get("senza_cf", False)
+        residente_estero = cleaned_data.get("residente_estero", False)
 
         if senza_cf:
             tipo_doc = (cleaned_data.get("tipo_documento") or "").strip()
@@ -202,6 +208,13 @@ class IscrizioneForm(forms.ModelForm):
             cf = (cleaned_data.get("codice_fiscale") or "").strip()
             if not cf:
                 self.add_error("codice_fiscale", "Questo campo è obbligatorio.")
+
+        if residente_estero:
+            if not (cleaned_data.get("nazione") or "").strip():
+                self.add_error("nazione", "Inserisci la nazione di residenza.")
+        else:
+            if not (cleaned_data.get("provincia") or "").strip():
+                self.add_error("provincia", "Seleziona la provincia.")
 
         data_nascita = cleaned_data.get("data_nascita")
         if data_nascita:

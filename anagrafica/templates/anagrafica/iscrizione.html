@@ -98,10 +98,25 @@
                 {{ form.via.errors }}
             </div>
 
-            <div class="form-row">
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="id_residente_estero" name="residente_estero"
+                        {% if form.data.residente_estero or form.initial.residente_estero %}checked{% endif %}>
+                    Residente all'estero
+                </label>
+            </div>
+
+            <div id="nazione-group" class="form-group" style="display:none;">
+                <label for="id_nazione">Nazione</label>
+                <input type="text" id="id_nazione" name="nazione" maxlength="100"
+                    value="{{ form.nazione.value|default:'' }}">
+                {{ form.nazione.errors }}
+            </div>
+
+            <div id="indirizzo-italia" class="form-row">
                 <div class="form-group">
                     <label for="id_provincia">Provincia</label>
-                    <select id="id_provincia" name="provincia" required>
+                    <select id="id_provincia" name="provincia">
                         <option value="">— Seleziona provincia —</option>
                         {% for sigla, nome in form.fields.provincia.choices %}
                             {% if sigla %}
@@ -116,16 +131,24 @@
                 </div>
                 <div class="form-group">
                     <label for="id_comune">Comune</label>
-                    <select id="id_comune" name="comune" required>
+                    <select id="id_comune" name="comune">
                         <option value="">— Seleziona prima la provincia —</option>
                     </select>
                     {{ form.comune.errors }}
                 </div>
             </div>
 
+            <div id="indirizzo-estero" class="form-row" style="display:none;">
+                <div class="form-group">
+                    <label for="id_comune_estero">Città</label>
+                    <input type="text" id="id_comune_estero" name="comune" maxlength="100"
+                        value="{{ form.comune.value|default:'' }}" disabled>
+                </div>
+            </div>
+
             <div class="form-group">
-                <label for="id_cap">CAP</label>
-                <input type="text" id="id_cap" name="cap" maxlength="5" value="{{ form.cap.value|default:'' }}"
+                <label for="id_cap">CAP/Codice postale</label>
+                <input type="text" id="id_cap" name="cap" maxlength="10" value="{{ form.cap.value|default:'' }}"
                     style="background:#f5f5f5;" readonly>
                 {{ form.cap.errors }}
             </div>
@@ -283,6 +306,22 @@
             capInput.style.background = "#fff";
             capInput.removeAttribute("readonly");
         });
+
+        // Toggle residente estero
+        function toggleEstero() {
+            const estero = document.getElementById("id_residente_estero").checked;
+            document.getElementById("indirizzo-italia").style.display = estero ? "none" : "";
+            document.getElementById("indirizzo-estero").style.display = estero ? "" : "none";
+            document.getElementById("nazione-group").style.display = estero ? "" : "none";
+            document.getElementById("id_provincia").disabled = estero;
+            document.getElementById("id_comune").disabled = estero;
+            document.getElementById("id_comune_estero").disabled = !estero;
+            const capInput = document.getElementById("id_cap");
+            capInput.readOnly = !estero;
+            capInput.style.background = estero ? "" : "#f5f5f5";
+        }
+        document.getElementById("id_residente_estero").addEventListener("change", toggleEstero);
+        toggleEstero();
     </script>
 
     <script>
