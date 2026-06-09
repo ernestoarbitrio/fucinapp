@@ -1072,7 +1072,8 @@ class IscrizioneRiepilogoViewTests(TestCase):
 
 
 class RigeneraQrCodesActionTests(AdminTestMixin, TestCase):
-    def test_rigenera_qr_codes(self):
+    @patch("anagrafica.email_utils.invia_tessera")
+    def test_rigenera_qr_codes(self, _mock_invia):
         socio = make_socio()
         socio.genera_qr_code()
         socio.save(update_fields=["qr_code"])

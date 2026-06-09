@@ -249,7 +249,7 @@ class SocioAdminForm(forms.ModelForm):
     def clean_codice_fiscale(self):
         cf = (self.cleaned_data.get("codice_fiscale") or "").upper().strip()
         if not cf:
-            return ""
+            return None
 
         try:
             valida_codice_fiscale(cf)
