@@ -309,6 +309,22 @@ class Quota(models.Model):
                 raise ValidationError(
                     f"Esiste già una quota per {self.socio} per l'anno {self.anno}."
                 )
+            today = timezone.now().date()
+            quota_attiva = (
+                Quota.objects.filter(
+                    socio=self.socio,
+                    stato="pagata",
+                    data_scadenza__gte=today,
+                )
+                .order_by("-data_scadenza")
+                .first()
+            )
+            if quota_attiva is not None:
+                raise ValidationError(
+                    f"{self.socio} ha già una quota attiva (anno {quota_attiva.anno}) "
+                    f"valida fino al {quota_attiva.data_scadenza.strftime('%d/%m/%Y')}. "
+                    "Non è possibile creare una nuova quota finché quella attuale non scade."
+                )
         created = self.socio.created_at.date() if self.socio_id else None
         if created:
             created_ym = (created.year, created.month)

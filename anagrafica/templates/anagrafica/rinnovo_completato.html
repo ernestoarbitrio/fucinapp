@@ -1,0 +1,23 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rinnovo inviato — Fucina Salentina APS</title>
+    <link rel="stylesheet" href="{% static 'anagrafica/style.css' %}">
+</head>
+
+<body>
+    <div class="card">
+        <div class="icon">🔄</div>
+        <h1>Rinnovo inviato!</h1>
+        <p>La tua richiesta di rinnovo{% if anno %} per l'anno <strong>{{ anno }}</strong>{% endif %}
+            è stata ricevuta.<br>
+            L'amministrazione la confermerà dopo il pagamento della quota.</p>
+        <div class="badge">⏳ In attesa di pagamento</div>
+    </div>
+</body>
+
+</html>

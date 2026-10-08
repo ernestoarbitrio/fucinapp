@@ -7,8 +7,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from anagrafica.email_utils import invia_email_iscrizione
-from anagrafica.forms import IscrizioneForm
-from anagrafica.models import Quota, Socio, TIPO_DOCUMENTO_CHOICES
+from anagrafica.forms import IscrizioneForm, RinnovoRicercaForm
+from anagrafica.models import (
+    Quota,
+    Socio,
+    TIPO_DOCUMENTO_CHOICES,
+    get_data_scadenza_default,
+)
 
 
 def verifica_socio(request, token):
@@ -38,8 +43,18 @@ def bulk_renew(request):
     soci_ids = request.GET.getlist("ids") or request.POST.getlist("selected_ids")
     soci = Socio.objects.filter(pk__in=soci_ids).prefetch_related("quote")
 
-    eligibili = [s for s in soci if not s.quote.filter(anno=anno_corrente).exists()]
-    non_eligibili = [s for s in soci if s.quote.filter(anno=anno_corrente).exists()]
+    eligibili = [
+        s
+        for s in soci
+        if not s.quote.filter(anno=anno_corrente).exists()
+        and not s.quote.filter(stato="pagata", data_scadenza__gte=today).exists()
+    ]
+    non_eligibili = [
+        s
+        for s in soci
+        if s.quote.filter(anno=anno_corrente).exists()
+        or s.quote.filter(stato="pagata", data_scadenza__gte=today).exists()
+    ]
 
     data_scadenza = get_data_scadenza_default(anno_corrente)
 
@@ -312,3 +327,89 @@ def iscrizione_riepilogo(request):
 
 def iscrizione_completata(request):
     return render(request, "anagrafica/iscrizione_completata.html")
+
+
+# Renewal (Rinnovo) Views
+
+
+def rinnovo(request):
+    """Step 1: search for an existing member by CF, or documento + email."""
+    socio = None
+    not_found = False
+
+    if request.method == "POST":
+        form = RinnovoRicercaForm(request.POST)
+        if form.is_valid():
+            socio = form.trova_socio()
+            if socio is None:
+                not_found = True
+            else:
+                request.session["rinnovo_socio_id"] = socio.pk
+                return redirect("anagrafica:rinnovo_conferma")
+    else:
+        form = RinnovoRicercaForm()
+
+    return render(
+        request,
+        "anagrafica/rinnovo.html",
+        {"form": form, "not_found": not_found},
+    )
+
+
+def rinnovo_conferma(request):
+    """Step 2: show the member and either block or confirm the renewal."""
+    socio_id = request.session.get("rinnovo_socio_id")
+    if not socio_id:
+        return redirect("anagrafica:rinnovo")
+
+    socio = get_object_or_404(Socio, pk=socio_id)
+    today = timezone.now().date()
+    anno_corrente = today.year
+
+    quota_attiva = socio.quota_attiva
+    gia_quota_anno = socio.quote.filter(anno=anno_corrente).first()
+    puo_rinnovare = quota_attiva is None and gia_quota_anno is None
+
+    if request.method == "POST":
+        if not puo_rinnovare:
+            # Someone bypassed the disabled button; re-render with the block.
+            return render(
+                request,
+                "anagrafica/rinnovo_conferma.html",
+                {
+                    "socio": socio,
+                    "quota_attiva": quota_attiva,
+                    "gia_quota_anno": gia_quota_anno,
+                    "puo_rinnovare": puo_rinnovare,
+                    "anno_corrente": anno_corrente,
+                },
+            )
+
+        quota = Quota.objects.create(
+            socio=socio,
+            anno=anno_corrente,
+            importo=5,
+            stato="in_attesa",
+            data_inizio=today.replace(day=1),
+            data_scadenza=get_data_scadenza_default(anno_corrente),
+        )
+        request.session["rinnovo_quota_anno"] = quota.anno
+        del request.session["rinnovo_socio_id"]
+        return redirect("anagrafica:rinnovo_completato")
+
+    return render(
+        request,
+        "anagrafica/rinnovo_conferma.html",
+        {
+            "socio": socio,
+            "quota_attiva": quota_attiva,
+            "gia_quota_anno": gia_quota_anno,
+            "puo_rinnovare": puo_rinnovare,
+            "anno_corrente": anno_corrente,
+        },
+    )
+
+
+def rinnovo_completato(request):
+    anno = request.session.pop("rinnovo_quota_anno", None)
+    return render(request, "anagrafica/rinnovo_completato.html", {"anno": anno})

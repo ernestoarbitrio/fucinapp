@@ -453,6 +453,70 @@ class QuotaModelTests(TestCase):
                 "clean() raised ValidationError for same month/year as created_at"
             )
 
+    def test_clean_rejects_new_quota_while_active_paid_exists(self):
+        # Paid quota for current year, valid until 31/12 — still active.
+        make_quota(self.socio)
+        nuova = Quota(
+            socio=self.socio,
+            anno=self.today.year + 1,
+            importo=Decimal("30.00"),
+            stato="in_attesa",
+            data_inizio=datetime.date(self.today.year + 1, 1, 1),
+            data_scadenza=datetime.date(self.today.year + 1, 12, 31),
+        )
+        with self.assertRaises(ValidationError) as ctx:
+            nuova.clean()
+        self.assertIn("quota attiva", str(ctx.exception))
+
+    def test_clean_allows_new_quota_when_previous_expired(self):
+        # Only an expired quota exists → new quota is allowed.
+        make_expired_quota(self.socio, years_ago=2)
+        nuova = Quota(
+            socio=self.socio,
+            anno=self.today.year + 5,
+            importo=Decimal("30.00"),
+            stato="in_attesa",
+            data_inizio=datetime.date(self.today.year + 5, 1, 1),
+            data_scadenza=datetime.date(self.today.year + 5, 12, 31),
+        )
+        try:
+            nuova.clean()
+        except ValidationError:
+            self.fail("clean() blocked a new quota despite only expired quotas")
+
+    def test_clean_allows_new_quota_when_existing_unpaid(self):
+        # An unpaid (in_attesa) quota must not block a new quota.
+        make_quota(self.socio, stato="in_attesa")
+        nuova = Quota(
+            socio=self.socio,
+            anno=self.today.year + 1,
+            importo=Decimal("30.00"),
+            stato="pagata",
+            data_inizio=datetime.date(self.today.year + 1, 1, 1),
+            data_scadenza=datetime.date(self.today.year + 1, 12, 31),
+        )
+        try:
+            nuova.clean()
+        except ValidationError:
+            self.fail("clean() blocked a new quota despite existing quota being unpaid")
+
+    def test_clean_blocks_until_cross_year_scadenza(self):
+        # Quota paid in current year, valid into next year (e.g. 31/03).
+        make_quota(
+            self.socio,
+            data_scadenza=datetime.date(self.today.year + 1, 3, 31),
+        )
+        nuova = Quota(
+            socio=self.socio,
+            anno=self.today.year + 1,
+            importo=Decimal("30.00"),
+            stato="in_attesa",
+            data_inizio=datetime.date(self.today.year + 1, 1, 1),
+            data_scadenza=datetime.date(self.today.year + 1, 12, 31),
+        )
+        with self.assertRaises(ValidationError):
+            nuova.clean()
+
 
 # ── Verifica Socio View ──────────────────────────────────────────────────────
 
@@ -1105,3 +1169,190 @@ class RigeneraQrCodesActionTests(AdminTestMixin, TestCase):
         self.assertEqual(mock_invia.call_args.kwargs["motivo"], "aggiornamento_qr")
         msg = str(list(response.context["messages"])[0])
         self.assertIn("Tessere inviate: 1", msg)
+
+
+# ── Rinnovo (Renewal) Flow ─────────────────────────────────────────────────────
+
+
+def make_socio_documento(**kwargs):
+    """A socio registered without CF, using a document + email instead."""
+    defaults = {
+        "codice_fiscale": None,
+        "tipo_documento": "carta_identita",
+        "numero_documento": "AB1234567",
+        "email": "doc.socio@example.com",
+    }
+    defaults.update(kwargs)
+    return make_socio(**defaults)
+
+
+class RinnovoViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.today = timezone.now().date()
+
+    def _only_expired(self, socio):
+        """Leave the socio with a single expired quota (clears auto-created)."""
+        socio.quote.all().delete()
+        make_expired_quota(socio, years_ago=2)
+
+    # ---- search step ----
+
+    def test_search_page_renders(self):
+        response = self.client.get("/anagrafica/rinnovo/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "anagrafica/rinnovo.html")
+
+    def test_search_by_cf_redirects_to_conferma(self):
+        socio = make_socio()
+        response = self.client.post(
+            "/anagrafica/rinnovo/", {"codice_fiscale": socio.codice_fiscale}
+        )
+        self.assertRedirects(response, "/anagrafica/rinnovo/conferma/")
+        self.assertEqual(self.client.session["rinnovo_socio_id"], socio.pk)
+
+    def test_search_by_cf_case_insensitive(self):
+        socio = make_socio()
+        response = self.client.post(
+            "/anagrafica/rinnovo/",
+            {"codice_fiscale": socio.codice_fiscale.lower()},
+        )
+        self.assertRedirects(response, "/anagrafica/rinnovo/conferma/")
+
+    def test_search_by_documento_and_email(self):
+        socio = make_socio_documento()
+        response = self.client.post(
+            "/anagrafica/rinnovo/",
+            {
+                "numero_documento": socio.numero_documento,
+                "email": socio.email,
+            },
+        )
+        self.assertRedirects(response, "/anagrafica/rinnovo/conferma/")
+        self.assertEqual(self.client.session["rinnovo_socio_id"], socio.pk)
+
+    def test_search_not_found_shows_message(self):
+        response = self.client.post(
+            "/anagrafica/rinnovo/", {"codice_fiscale": "RSSMRA90A01F205X"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["not_found"])
+        self.assertNotIn("rinnovo_socio_id", self.client.session)
+
+    def test_search_requires_cf_or_documento_email(self):
+        response = self.client.post("/anagrafica/rinnovo/", {})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["form"].is_valid())
+
+    def test_search_documento_without_email_invalid(self):
+        make_socio_documento()
+        response = self.client.post(
+            "/anagrafica/rinnovo/", {"numero_documento": "AB1234567"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["form"].is_valid())
+
+    # ---- conferma step ----
+
+    def test_conferma_without_session_redirects(self):
+        response = self.client.get("/anagrafica/rinnovo/conferma/")
+        self.assertRedirects(response, "/anagrafica/rinnovo/")
+
+    def test_conferma_blocks_when_active_quota(self):
+        socio = make_socio()
+        make_quota(socio)  # paid, active until 31/12
+        session = self.client.session
+        session["rinnovo_socio_id"] = socio.pk
+        session.save()
+        response = self.client.get("/anagrafica/rinnovo/conferma/")
+        self.assertFalse(response.context["puo_rinnovare"])
+        self.assertIsNotNone(response.context["quota_attiva"])
+
+    def test_conferma_blocks_when_quota_for_current_year_exists(self):
+        socio = make_socio()
+        # Auto-created in_attesa quota for current year already exists.
+        session = self.client.session
+        session["rinnovo_socio_id"] = socio.pk
+        session.save()
+        response = self.client.get("/anagrafica/rinnovo/conferma/")
+        self.assertFalse(response.context["puo_rinnovare"])
+        self.assertIsNotNone(response.context["gia_quota_anno"])
+
+    def test_conferma_allows_when_only_expired(self):
+        socio = make_socio()
+        self._only_expired(socio)
+        session = self.client.session
+        session["rinnovo_socio_id"] = socio.pk
+        session.save()
+        response = self.client.get("/anagrafica/rinnovo/conferma/")
+        self.assertTrue(response.context["puo_rinnovare"])
+
+    def test_conferma_post_creates_pending_quota(self):
+        socio = make_socio()
+        self._only_expired(socio)
+        session = self.client.session
+        session["rinnovo_socio_id"] = socio.pk
+        session.save()
+
+        response = self.client.post("/anagrafica/rinnovo/conferma/")
+        self.assertRedirects(response, "/anagrafica/rinnovo/completato/")
+
+        nuova = socio.quote.filter(anno=self.today.year).first()
+        self.assertIsNotNone(nuova)
+        self.assertEqual(nuova.stato, "in_attesa")
+        self.assertEqual(
+            nuova.data_scadenza, get_data_scadenza_default(self.today.year)
+        )
+        # Session cleaned up for the next step
+        self.assertNotIn("rinnovo_socio_id", self.client.session)
+
+    def test_conferma_post_blocked_does_not_create_quota(self):
+        socio = make_socio()
+        make_quota(socio)  # active
+        before = socio.quote.count()
+        session = self.client.session
+        session["rinnovo_socio_id"] = socio.pk
+        session.save()
+
+        response = self.client.post("/anagrafica/rinnovo/conferma/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(socio.quote.count(), before)
+
+    # ---- completato step ----
+
+    def test_completato_renders(self):
+        session = self.client.session
+        session["rinnovo_quota_anno"] = self.today.year
+        session.save()
+        response = self.client.get("/anagrafica/rinnovo/completato/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "anagrafica/rinnovo_completato.html")
+        self.assertEqual(response.context["anno"], self.today.year)
+
+    # ---- full happy path ----
+
+    def test_full_renewal_flow(self):
+        socio = make_socio()
+        self._only_expired(socio)
+
+        # 1. search
+        r1 = self.client.post(
+            "/anagrafica/rinnovo/", {"codice_fiscale": socio.codice_fiscale}
+        )
+        self.assertRedirects(r1, "/anagrafica/rinnovo/conferma/")
+
+        # 2. confirm page shows renewable
+        r2 = self.client.get("/anagrafica/rinnovo/conferma/")
+        self.assertTrue(r2.context["puo_rinnovare"])
+
+        # 3. submit renewal
+        r3 = self.client.post("/anagrafica/rinnovo/conferma/")
+        self.assertRedirects(r3, "/anagrafica/rinnovo/completato/")
+
+        # 4. completion page
+        r4 = self.client.get("/anagrafica/rinnovo/completato/")
+        self.assertEqual(r4.status_code, 200)
+
+        self.assertEqual(
+            socio.quote.filter(anno=self.today.year, stato="in_attesa").count(), 1
+        )

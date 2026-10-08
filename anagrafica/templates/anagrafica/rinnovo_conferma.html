@@ -1,0 +1,76 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conferma rinnovo — Fucina Salentina APS</title>
+    <link rel="stylesheet" href="{% static 'anagrafica/style.css' %}">
+</head>
+
+<body>
+    <div class="card">
+        <div class="logo">
+            <img src="{% static 'anagrafica/logo-fucina.jpeg' %}" alt="Fucina Salentina"
+                style="width:120px; height:auto; margin-bottom:12px;">
+            <p>Conferma il rinnovo della tessera</p>
+        </div>
+
+        <div class="row">
+            <span class="label">Nome</span>
+            <span class="value">{{ socio.nome_completo }}</span>
+        </div>
+        {% if socio.codice_fiscale %}
+        <div class="row">
+            <span class="label">Codice Fiscale</span>
+            <span class="value">{{ socio.codice_fiscale }}</span>
+        </div>
+        {% else %}
+        <div class="row">
+            <span class="label">Documento</span>
+            <span class="value">{{ socio.get_tipo_documento_display }} n. {{ socio.numero_documento }}</span>
+        </div>
+        {% endif %}
+        <div class="row">
+            <span class="label">Email</span>
+            <span class="value">{{ socio.email }}</span>
+        </div>
+
+        <hr class="divider">
+
+        {% if puo_rinnovare %}
+            <div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:8px; padding:12px 16px; margin-bottom:18px; color:#2e7d32;">
+                ✅ Puoi rinnovare la tua tessera per l'anno <strong>{{ anno_corrente }}</strong>.
+                <br>
+                Al termine, la richiesta sarà in attesa di pagamento e verrà confermata
+                dall'amministrazione.
+            </div>
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <button type="submit" class="btn">Procedo con il rinnovo →</button>
+            </form>
+        {% elif quota_attiva %}
+            <div style="background:#e8f5e9; border:1px solid #a5d6a7; border-radius:8px; padding:12px 16px; margin-bottom:18px; color:#2e7d32;">
+                ✅ La tua tessera è <strong>ancora valida</strong> fino al
+                <strong>{{ quota_attiva.data_scadenza|date:"d/m/Y" }}</strong>
+                (anno {{ quota_attiva.anno }}).
+                <br>
+                Non è necessario rinnovarla finché non scade.
+            </div>
+        {% elif gia_quota_anno %}
+            <div style="background:#fff3cd; border:1px solid #f0a500; border-radius:8px; padding:12px 16px; margin-bottom:18px; color:#8a6d00;">
+                ⏳ Risulta già una quota per l'anno <strong>{{ anno_corrente }}</strong>
+                ({{ gia_quota_anno.get_stato_display }}).
+                <br>
+                Se è in attesa di pagamento, contatta l'amministrazione per completarla.
+            </div>
+        {% endif %}
+
+        <p class="footer-note">
+            <a href="{% url 'anagrafica:rinnovo' %}">← Cerca un altro socio</a>
+        </p>
+    </div>
+</body>
+
+</html>

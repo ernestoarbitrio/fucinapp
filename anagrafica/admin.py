@@ -324,6 +324,23 @@ class QuotaInline(admin.StackedInline):
                 qs = qs.exclude(pk=instance.pk)
             if qs.exists():
                 raise forms.ValidationError(f"Esiste già una quota per l'anno {anno}.")
+        if socio and instance.pk is None:
+            today = timezone.now().date()
+            quota_attiva = (
+                Quota.objects.filter(
+                    socio=socio,
+                    stato="pagata",
+                    data_scadenza__gte=today,
+                )
+                .order_by("-data_scadenza")
+                .first()
+            )
+            if quota_attiva is not None:
+                raise forms.ValidationError(
+                    f"Il socio ha già una quota attiva (anno {quota_attiva.anno}) "
+                    f"valida fino al {quota_attiva.data_scadenza.strftime('%d/%m/%Y')}. "
+                    "Non è possibile creare una nuova quota finché quella attuale non scade."
+                )
 
     def get_formset(self, request, obj=None, **kwargs):
         formset = super().get_formset(request, obj, **kwargs)

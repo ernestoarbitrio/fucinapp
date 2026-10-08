@@ -113,6 +113,64 @@ PROVINCE_ITALIANE = [
 ]
 
 
+class RinnovoRicercaForm(forms.Form):
+    """Search a member for self-service renewal.
+
+    Primary lookup is by codice fiscale. For members registered without a
+    codice fiscale, lookup is by numero documento + email instead.
+    """
+
+    codice_fiscale = forms.CharField(
+        label="Codice Fiscale",
+        max_length=16,
+        required=False,
+    )
+    numero_documento = forms.CharField(
+        label="Numero documento",
+        max_length=30,
+        required=False,
+    )
+    email = forms.EmailField(
+        label="Email",
+        required=False,
+    )
+
+    def clean_codice_fiscale(self):
+        cf = (self.cleaned_data.get("codice_fiscale") or "").upper().strip()
+        return cf
+
+    def clean(self):
+        cleaned_data = super().clean()
+        cf = cleaned_data.get("codice_fiscale")
+        numero_documento = (cleaned_data.get("numero_documento") or "").strip()
+        email = (cleaned_data.get("email") or "").strip()
+
+        if cf:
+            valida_codice_fiscale(cf)
+        elif numero_documento and email:
+            # Document-based search path — nothing extra to validate here.
+            pass
+        else:
+            raise forms.ValidationError(
+                "Inserisci il codice fiscale, oppure il numero documento insieme "
+                "all'email."
+            )
+        return cleaned_data
+
+    def trova_socio(self):
+        """Return the matching Socio or None. Call only on a valid form."""
+        cf = self.cleaned_data.get("codice_fiscale")
+        numero_documento = (self.cleaned_data.get("numero_documento") or "").strip()
+        email = (self.cleaned_data.get("email") or "").strip()
+
+        if cf:
+            return Socio.objects.filter(codice_fiscale__iexact=cf).first()
+        return Socio.objects.filter(
+            numero_documento__iexact=numero_documento,
+            email__iexact=email,
+        ).first()
+
+
 class IscrizioneForm(forms.ModelForm):
     provincia = forms.ChoiceField(
         choices=[("", "— Seleziona provincia —")] + PROVINCE_ITALIANE,

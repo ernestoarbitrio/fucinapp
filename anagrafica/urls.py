@@ -19,4 +19,7 @@ urlpatterns = [
         views.iscrizione_completata,
         name="iscrizione_completata",
     ),
+    path("rinnovo/", views.rinnovo, name="rinnovo"),
+    path("rinnovo/conferma/", views.rinnovo_conferma, name="rinnovo_conferma"),
+    path("rinnovo/completato/", views.rinnovo_completato, name="rinnovo_completato"),
 ]

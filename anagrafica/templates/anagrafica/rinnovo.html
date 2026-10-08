@@ -1,0 +1,107 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rinnova la tessera — Fucina Salentina APS</title>
+    <link rel="stylesheet" href="{% static 'anagrafica/style.css' %}">
+</head>
+
+<body>
+    <div class="card">
+        <div class="logo">
+            <img src="{% static 'anagrafica/logo-fucina.jpeg' %}" alt="Fucina Salentina"
+                style="width:120px; height:auto; margin-bottom:12px;">
+            <p>Rinnova la tua tessera associativa</p>
+        </div>
+
+        <p style="color:#555; font-size:0.95rem; line-height:1.6; text-align:center;">
+            Inserisci il tuo <strong>codice fiscale</strong>. Se ti sei iscritto senza
+            codice fiscale, cerca con il <strong>numero del documento</strong> e la
+            tua <strong>email</strong>.
+        </p>
+
+        {% if not_found %}
+        <div style="background:#ffebee; border:1px solid #ef9a9a; border-radius:8px; padding:12px 16px; margin-bottom:18px; color:#c62828;">
+            ❌ Nessun socio trovato con i dati inseriti. Controlla e riprova.
+        </div>
+        {% endif %}
+
+        {% if form.non_field_errors %}
+        <div style="background:#ffebee; border:1px solid #ef9a9a; border-radius:8px; padding:12px 16px; margin-bottom:18px; color:#c62828;">
+            {{ form.non_field_errors }}
+        </div>
+        {% endif %}
+
+        <form method="post" novalidate>
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="id_codice_fiscale">Codice Fiscale</label>
+                {{ form.codice_fiscale }}
+                {{ form.codice_fiscale.errors }}
+            </div>
+
+            <div class="form-group">
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem; cursor:pointer;">
+                    <input type="checkbox" id="no-cf-toggle"> Non ho il codice fiscale
+                </label>
+            </div>
+
+            <div id="documento-section" style="display:none;">
+                <div style="background:#e3f2fd; border:1px solid #90caf9; border-radius:8px; padding:12px 16px; margin-bottom:18px;">
+                    <strong>📄 Ricerca con documento</strong> — Inserisci numero documento ed email.
+                </div>
+                <div class="form-group">
+                    <label for="id_numero_documento">Numero documento</label>
+                    {{ form.numero_documento }}
+                    {{ form.numero_documento.errors }}
+                </div>
+                <div class="form-group">
+                    <label for="id_email">Email</label>
+                    {{ form.email }}
+                    {{ form.email.errors }}
+                </div>
+            </div>
+
+            <hr class="divider">
+
+            <button type="submit" class="btn">Cerca →</button>
+        </form>
+
+        <p class="footer-note">
+            Non sei ancora socio? <a href="{% url 'anagrafica:iscrizione' %}">Iscriviti qui</a>.
+        </p>
+    </div>
+
+    <script>
+    (function () {
+        const toggle = document.getElementById("no-cf-toggle");
+        const cfField = document.getElementById("id_codice_fiscale");
+        const docSection = document.getElementById("documento-section");
+
+        function update() {
+            const noCf = toggle.checked;
+            cfField.disabled = noCf;
+            cfField.style.opacity = noCf ? "0.4" : "1";
+            if (noCf) cfField.value = "";
+            docSection.style.display = noCf ? "block" : "none";
+        }
+
+        // Keep the document section open if the user was searching that way.
+        const numDoc = "{{ form.numero_documento.value|default:'' }}";
+        const email = "{{ form.email.value|default:'' }}";
+        const cf = "{{ form.codice_fiscale.value|default:'' }}";
+        if (!cf && (numDoc || email)) {
+            toggle.checked = true;
+        }
+
+        toggle.addEventListener("change", update);
+        update();
+    })();
+    </script>
+</body>
+
+</html>
