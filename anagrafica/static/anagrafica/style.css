@@ -93,6 +93,7 @@ input[type="text"],
 input[type="email"],
 input[type="date"],
 input[type="tel"],
+input[type="password"],
 select {
     width: 100%;
     padding: 10px 14px;
@@ -109,6 +110,7 @@ input[type="text"]:focus,
 input[type="email"]:focus,
 input[type="date"]:focus,
 input[type="tel"]:focus,
+input[type="password"]:focus,
 select:focus {
     border-color: #417690;
     box-shadow: 0 0 0 3px rgba(65,118,144,0.1);

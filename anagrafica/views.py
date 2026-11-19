@@ -1,8 +1,11 @@
 import datetime
+from functools import wraps
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.views import redirect_to_login
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -413,3 +416,77 @@ def rinnovo_conferma(request):
 def rinnovo_completato(request):
     anno = request.session.pop("rinnovo_quota_anno", None)
     return render(request, "anagrafica/rinnovo_completato.html", {"anno": anno})
+
+
+# Referenti-only: Verifica stato quota corrente
+
+REFERENTI_GROUP = "Referenti"
+
+
+def referenti_required(view_func):
+    """Login required; "Referenti" group members, staff and superusers."""
+
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        user = request.user
+        if not user.is_authenticated:
+            return redirect_to_login(request.get_full_path())
+        if not (
+            user.is_superuser
+            or user.is_staff
+            or user.groups.filter(name=REFERENTI_GROUP).exists()
+        ):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
+
+
+@referenti_required
+def verifica_stato_quota(request):
+    from django.db.models import Q
+
+    today = timezone.now().date()
+    anno_corrente = today.year
+
+    results = []
+    search_query = ""
+
+    if request.method == "POST":
+        search_query = (request.POST.get("q") or "").strip()
+        if search_query:
+            qs = (
+                Socio.objects.filter(
+                    Q(cognome__icontains=search_query)
+                    | Q(nome__icontains=search_query)
+                    | Q(codice_fiscale__icontains=search_query)
+                    | Q(email__icontains=search_query),
+                )
+                .prefetch_related("quote")
+                .order_by("cognome", "nome")
+                .distinct()
+            )
+            for socio in qs:
+                quota_attiva = socio.quota_attiva
+                anno_quota = socio.quote.filter(anno=anno_corrente).first()
+                results.append(
+                    {
+                        "socio": socio,
+                        "quota_attiva": quota_attiva,
+                        "anno_quota": anno_quota,
+                    }
+                )
+
+    in_regola = sum(1 for r in results if r["quota_attiva"])
+    in_attesa = sum(1 for r in results if r["anno_quota"] and not r["quota_attiva"])
+    nessuna = len(results) - in_regola - in_attesa
+
+    context = {
+        "results": results,
+        "search_query": search_query,
+        "anno_corrente": anno_corrente,
+        "in_regola": in_regola,
+        "in_attesa": in_attesa,
+        "nessuna": nessuna,
+    }
+    return render(request, "anagrafica/verifica_stato_quota.html", context)

@@ -1,0 +1,36 @@
+{% load static %}<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Accesso negato — Fucina Salentina APS</title>
+<link rel="stylesheet" href="{% static 'anagrafica/style.css' %}">
+</head>
+<body>
+<div class="card" style="text-align:center;">
+    <div class="logo">
+        <img src="{% static 'anagrafica/logo-fucina.jpeg' %}" alt="Fucina Salentina"
+             style="width:120px; height:auto; margin-bottom:12px;">
+    </div>
+    <div style="font-size:3rem; margin-bottom:8px;">🔒</div>
+    <h1 style="font-size:1.4rem; margin:0 0 12px;">Accesso negato</h1>
+    <p style="color:#555; line-height:1.6; margin-bottom:8px;">
+        Questa pagina è riservata ai <strong>referenti</strong>.
+    </p>
+    {% if user.is_authenticated %}
+    <p style="color:#555; line-height:1.6; margin-bottom:20px;">
+        Hai effettuato l'accesso come <strong>{{ user.get_username }}</strong>, ma questo account non ha i permessi necessari.
+        Se pensi sia un errore, contatta un amministratore.
+    </p>
+    <form method="post" action="{% url 'anagrafica:logout' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn">Esci e accedi con un altro account</button>
+    </form>
+    {% else %}
+    <p style="color:#555; line-height:1.6; margin-bottom:20px;">Accedi con un account autorizzato per continuare.</p>
+    <a href="{% url 'anagrafica:login' %}" class="btn">Accedi</a>
+    {% endif %}
+    <a href="{% url 'anagrafica:iscrizione' %}" class="btn btn-secondary" style="margin-top:12px;">← Torna alla home</a>
+</div>
+</body>
+</html>

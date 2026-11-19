@@ -1,0 +1,234 @@
+{% load static %}<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verifica quota — Fucina Salentina APS</title>
+<link rel="stylesheet" href="{% static 'anagrafica/style.css' %}">
+<style>
+    .wrap { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .topbar h1 { margin:0; font-size:1.6rem; }
+    .topbar form { margin:0; display:flex; align-items:center; gap:12px; }
+    .topbar .user { color:#666; font-size:0.9rem; }
+    .topbar .logout-btn {
+        padding:8px 16px; background:#fff; color:#c62828;
+        border:1px solid #ef9a9a; border-radius:8px;
+        font-size:0.9rem; font-weight:600; cursor:pointer;
+        transition: background 0.2s;
+    }
+    .topbar .logout-btn:hover { background:#ffebee; }
+    .table-scroll { overflow-x:auto; }
+
+    .search-box {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+    .search-box form {
+        display: flex;
+        gap: 12px;
+        align-items: flex-end;
+    }
+    .search-box .field {
+        flex: 1;
+    }
+    .search-box label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #666;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .search-box input {
+        width: 100%;
+        padding: 10px 14px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #f7f7f7;
+        color: #222;
+        font-size: 0.95rem;
+        box-sizing: border-box;
+    }
+    .search-box input:focus {
+        outline: none;
+        border-color: #4285f4;
+        box-shadow: 0 0 0 2px rgba(66,133,244,0.15);
+    }
+    .search-box button {
+        padding: 10px 24px;
+        background: #4285f4;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .search-box button:hover {
+        background: #1565c0;
+    }
+
+    .stat-summary {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+    .stat-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    .pill-green  { background: #e8f5e9; color: #2e7d32; }
+    .pill-yellow { background: #fff8e1; color: #8a6d00; }
+    .pill-gray   { background: #f5f5f5; color: #666; }
+
+    table.results-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    table.results-table thead th {
+        background: #f7f7f7;
+        color: #666;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 12px 16px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    table.results-table tbody td {
+        padding: 12px 16px;
+        border-bottom: 1px solid #ddd;
+        color: #222;
+        background: #fff;
+    }
+    table.results-table tbody tr:last-child td { border-bottom: none; }
+    table.results-table tbody tr:hover td { background: #f7f7f7; }
+    table.results-table a { color: #1565c0; text-decoration: none; }
+    table.results-table a:hover { text-decoration: underline; }
+
+    .status-ok  { color: #2e7d32; font-weight: 600; }
+    .status-pend { color: #8a6d00; font-weight: 600; }
+    .status-none { color: #999; font-style: italic; }
+
+    .empty-state {
+        text-align: center;
+        padding: 48px 16px;
+        color: #666;
+        font-size: 0.95rem;
+    }
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="topbar">
+    <h1>🔍 Verifica quota associativa {{ anno_corrente }}</h1>
+    <form method="post" action="{% url 'anagrafica:logout' %}">{% csrf_token %}
+        <span class="user">👤 {{ request.user.get_username }}</span>
+        <button type="submit" class="logout-btn">Esci</button>
+    </form>
+</div>
+
+<!-- Search form -->
+<div class="search-box">
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="field">
+            <label for="id_q">Cerca socio (nome, cognome, codice fiscale, email)</label>
+            <input type="text" id="id_q" name="q" value="{{ search_query|default:'' }}"
+                   placeholder="es. Rossi, 12345678901234, email@…" autofocus>
+        </div>
+        <button type="submit">Cerca</button>
+    </form>
+</div>
+
+{% if search_query and results %}
+    <!-- Summary pills -->
+    <div class="stat-summary">
+        <span class="stat-pill pill-green">✅ In regola: {{ in_regola }}</span>
+        <span class="stat-pill pill-yellow">⏳ In attesa: {{ in_attesa }}</span>
+        <span class="stat-pill pill-gray">⚠️ Nessuna: {{ nessuna }}</span>
+    </div>
+
+    <!-- Results table -->
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th>Socio</th>
+                <th>Email</th>
+                <th>Codice Fiscale</th>
+                <th>Anno</th>
+                <th>Stato</th>
+                <th>Scadenza</th>
+                <th>Importo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in results %}
+            <tr>
+                <td>
+                    {{ row.socio.cognome|upper }} {{ row.socio.nome }}
+                </td>
+                <td>{{ row.socio.email }}</td>
+                <td>{{ row.socio.codice_fiscale|default:"—" }}</td>
+                <td>
+                    {% if row.quota_attiva %}{{ row.quota_attiva.anno }}{% elif row.anno_quota %}{{ row.anno_quota.anno }}{% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if row.quota_attiva %}
+                        <span class="status-ok">✅ In regola</span>
+                    {% elif row.anno_quota %}
+                        <span class="status-pend">⏳ {{ row.anno_quota.get_stato_display }}</span>
+                    {% else %}
+                        <span class="status-none">Nessuna quota</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if row.quota_attiva %}{{ row.quota_attiva.data_scadenza|date:"d/m/Y" }}{% else %}—{% endif %}
+                </td>
+                <td>
+                    {% if row.quota_attiva %}€{{ row.quota_attiva.importo }}{% else %}—{% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" style="text-align:center; color:var(--body-quiet-color); padding:16px;">
+                    Nessun socio trovato per "{{ search_query }}".
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+{% elif search_query and not results %}
+    <div class="empty-state">
+        <div class="icon">🔍</div>
+        <p>Nessun socio trovato per "{{ search_query }}".</p>
+    </div>
+
+{% elif not search_query %}
+    <div class="empty-state">
+        <div class="icon">🔎</div>
+        <p>Cerca un socio per nome, cognome, codice fiscale o email per verificarne lo stato della quota.</p>
+    </div>
+{% endif %}
+
+</div>
+</body>
+</html>

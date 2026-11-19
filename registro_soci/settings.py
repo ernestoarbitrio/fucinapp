@@ -148,3 +148,7 @@ RESEND_API_KEY = EMAIL_HOST_PASSWORD
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL", "Fucina Salentina APS <no-reply@fucinasalentina.it>"
 )
+
+LOGIN_URL = "/anagrafica/login/"
+LOGIN_REDIRECT_URL = "/anagrafica/verifica-quota/"
+LOGOUT_REDIRECT_URL = "/anagrafica/login/"

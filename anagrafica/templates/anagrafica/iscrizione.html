@@ -10,6 +10,31 @@
 </head>
 
 <body>
+    <nav class="menu" style="position:fixed; top:16px; left:16px; z-index:100;">
+        <style>
+            .menu summary { list-style:none; cursor:pointer; width:38px; height:38px; display:flex; align-items:center; justify-content:center; gap:3px; border:1px solid #b8d4dc; border-radius:8px; background:#fff; }
+            .menu summary::-webkit-details-marker { display:none; }
+            .menu summary:hover, .menu details[open] summary { background:#eef5f7; }
+            .menu summary i { display:block; width:4px; height:4px; border-radius:50%; background:#2c5364; }
+            .menu-list { position:absolute; top:44px; left:0; z-index:10; min-width:200px; background:#fff; border:1px solid #ddd; border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.12); overflow:hidden; }
+            .menu-list a { display:block; padding:10px 16px; color:#2c5364; text-decoration:none; font-size:0.9rem; font-weight:600; }
+            .menu-list a:hover { background:#eef5f7; }
+        </style>
+        <details>
+            <summary aria-label="Menu"><i></i><i></i><i></i></summary>
+            <div class="menu-list">
+                <a href="{% url 'anagrafica:iscrizione' %}">📝 Iscrizione</a>
+                <a href="{% url 'anagrafica:rinnovo' %}">🔄 Rinnova la tessera</a>
+                <a href="{% url 'anagrafica:verifica_stato_quota' %}">🔍 Verifica quota</a>
+            </div>
+        </details>
+        <script>
+            document.addEventListener("click", function (e) {
+                var d = document.querySelector(".menu details");
+                if (d && !d.contains(e.target)) d.removeAttribute("open");
+            });
+        </script>
+    </nav>
     <div class="card">
         <div class="logo">
             <img src="{% static 'anagrafica/logo-fucina.jpeg' %}" alt="Fucina Salentina"
